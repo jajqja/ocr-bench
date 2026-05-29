@@ -1,0 +1,10 @@
+surya-ocr==0.15.4
+huggingface_hub
+click
+tabulate
+datasets
+Pillow
+numpy
+fitz
+pymupdf
+rapidfuzz

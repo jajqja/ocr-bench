@@ -1,0 +1,350 @@
+
+## OCR Benchmark Suite
+
+A comprehensive benchmarking suite for evaluating OCR models (Text Detection & Text Recognition) on PDF datasets.
+
+### Features
+
+✅ **Text Detection Evaluation**
+- Precision & Recall metrics
+- IOU (Intersection over Union) score
+- Works with PDF files or HuggingFace datasets
+
+✅ **Text Recognition Evaluation**
+- Word Error Rate (WER)
+- Character Error Rate (CER)  
+- Exact Match Accuracy
+- Works with PDF files or HuggingFace datasets
+
+✅ **Model Management**
+- Load models from local storage
+- Download models from HuggingFace Hub
+- Support for private models with HF token
+
+✅ **Comprehensive Reporting**
+- JSON results with detailed metrics
+- Sample predictions visualization
+- Benchmark comparison reports
+
+---
+
+## Installation
+
+```bash
+# Clone repository
+git clone https://github.com/jajqja/ocr-bench.git
+cd ocr-bench
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+---
+
+## Quick Start
+
+### 1. Load Models
+
+#### Option A: Load from Local Storage
+```bash
+python -m load_model verify-models \
+  --detection_model ./path/to/detection/model \
+  --recognition_model ./path/to/recognition/model
+```
+
+#### Option B: Download from HuggingFace
+```bash
+# Download detection model
+python -m load_model download-detection \
+  --repo_id username/detection-model
+
+# Download recognition model
+python -m load_model download-recognition \
+  --repo_id username/recognition-model
+```
+
+### 2. Run Benchmark on PDF
+
+```bash
+# Full benchmark (detection + recognition)
+python benchmark.py benchmark-pdf \
+  --pdf_path /path/to/document.pdf \
+  --detection_model /path/to/detection/model \
+  --recognition_model /path/to/recognition/model \
+  --max_pages 100 \
+  --results_dir ./results
+
+# Or use HuggingFace models
+python benchmark.py benchmark-pdf \
+  --pdf_path /path/to/document.pdf \
+  --detection_model username/detection-model \
+  --recognition_model username/recognition-model
+```
+
+### 3. Run Individual Benchmarks
+
+#### Detection Only
+```bash
+python -m text_detection \
+  --pdf_path /path/to/document.pdf \
+  --model_path /path/to/detection/model \
+  --max_rows 100 \
+  --results_dir ./detection_results \
+  --debug  # (optional) save visualization images
+```
+
+#### Recognition Only
+```bash
+python -m text_recognition \
+  --pdf_path /path/to/document.pdf \
+  --model_path /path/to/recognition/model \
+  --max_rows 100 \
+  --results_dir ./recognition_results
+```
+
+### 4. Compare Results
+
+```bash
+python benchmark.py compare-results --results_dir ./results
+```
+
+---
+
+## Metrics Explanation
+
+### Detection Metrics
+
+| Metric | Description | Range |
+|--------|-------------|-------|
+| **Precision** | % of predicted boxes that correctly cover ground truth | 0-1 |
+| **Recall** | % of ground truth boxes that are covered by predictions | 0-1 |
+| **IOU** | Intersection over Union with penalty for overlapping boxes | 0-1 |
+
+### Recognition Metrics
+
+| Metric | Description | Range | Notes |
+|--------|-------------|-------|-------|
+| **CER** | Character Error Rate (Levenshtein distance) | 0+ | Lower is better |
+| **WER** | Word Error Rate (word-level Levenshtein) | 0+ | Lower is better |
+| **Accuracy** | Exact match accuracy (% perfectly correct) | 0-1 | Higher is better |
+
+---
+
+## Output Structure
+
+```
+results/
+├── detection/
+│   └── document_name/
+│       ├── results.json          # Detailed metrics per page
+│       └── 0_bbox.png, 1_bbox.png, ...  # (optional) debug images
+├── recognition/
+│   └── document_name_results.json # Recognition metrics
+└── benchmark_summary.json         # Overall summary
+```
+
+### Sample Results File (Detection)
+```json
+{
+  "dataset": "document",
+  "model": "path/to/model",
+  "num_samples": 50,
+  "metrics": {
+    "surya": {
+      "precision": 0.95,
+      "recall": 0.92,
+      "iou": 0.88
+    }
+  },
+  "page_metrics": { ... }
+}
+```
+
+### Sample Results File (Recognition)
+```json
+{
+  "model": "path/to/model",
+  "dataset": "document",
+  "num_samples": 50,
+  "metrics": {
+    "cer": 0.05,
+    "wer": 0.08,
+    "accuracy": 0.92
+  },
+  "predictions": [ ... ]
+}
+```
+
+---
+
+## Advanced Usage
+
+### Using with HuggingFace Datasets
+
+```bash
+# Benchmark on HuggingFace dataset
+python -m text_detection \
+  --dataset_name mnist-ocr-digits \
+  --model_path ./detection_model \
+  --max_rows 1000
+
+python -m text_recognition \
+  --dataset_name ocr-text-recognition \
+  --model_path ./recognition_model \
+  --max_rows 1000
+```
+
+### Private Models with HuggingFace Token
+
+```bash
+python benchmark.py benchmark-pdf \
+  --pdf_path document.pdf \
+  --detection_model username/private-detection \
+  --recognition_model username/private-recognition \
+  --hf_token your_hf_token
+```
+
+### Debug Mode with Visualizations
+
+```bash
+python -m text_detection \
+  --pdf_path document.pdf \
+  --model_path ./model \
+  --debug  # Saves detection bbox images
+```
+
+---
+
+## Project Structure
+
+```
+ocr-bench/
+├── load_model.py              # Model loading utilities & CLI
+├── text_detection.py          # Detection benchmark script
+├── text_recognition.py        # Recognition benchmark script
+├── benchmark.py               # Main unified benchmark CLI
+├── utils/
+│   ├── metrics.py             # Metric calculations (IOU, CER, WER, etc.)
+│   ├── bbox.py                # Bounding box utilities
+│   ├── scoring.py             # Text scoring utilities
+│   └── tatr.py                # Table recognition utilities
+├── requirements.txt           # Python dependencies
+└── README.md                  # This file
+```
+
+---
+
+## Supported Models
+
+### Detection Models
+- Surya Detection (default)
+- Any model compatible with Surya's DetectionPredictor
+
+### Recognition Models
+- Surya Recognition (default)
+- Any model compatible with Surya's RecognitionPredictor
+
+---
+
+## Command-Line Help
+
+```bash
+# Main benchmark help
+python benchmark.py --help
+
+# Individual command help
+python benchmark.py benchmark-pdf --help
+python benchmark.py benchmark-dataset --help
+python benchmark.py verify-models --help
+python benchmark.py compare-results --help
+
+# Model loading help
+python -m load_model --help
+
+# Detection benchmark help
+python -m text_detection --help
+
+# Recognition benchmark help
+python -m text_recognition --help
+```
+
+---
+
+## Troubleshooting
+
+### Model not found error
+```bash
+# Verify models can be loaded
+python benchmark.py verify-models \
+  --detection_model /path/to/model \
+  --recognition_model /path/to/model
+```
+
+### Out of memory errors
+Reduce batch size or max_rows:
+```bash
+python -m text_recognition \
+  --pdf_path document.pdf \
+  --model_path ./model \
+  --max_rows 10 \
+  --batch_size 2
+```
+
+### PDF extraction issues
+Ensure PDF is readable:
+```bash
+# Test PDF loading
+python -c "import fitz; doc = fitz.open('document.pdf'); print(f'Pages: {len(doc)}')"
+```
+
+---
+
+## Colab Usage
+
+```python
+# In Google Colab
+!git clone https://github.com/jajqja/ocr-bench.git
+%cd ocr-bench
+
+!pip install -r requirements.txt
+
+# Run benchmark
+!python -m text_detection --pdf_path sample.pdf --model_path ./model
+```
+
+---
+
+## Citation
+
+If you use this benchmark suite in your research, please cite:
+
+```bibtex
+@software{ocr_bench,
+  title = {OCR Benchmark Suite},
+  author = {...},
+  year = {2024},
+  url = {https://github.com/jajqja/ocr-bench}
+}
+```
+
+---
+
+## Contributing
+
+Contributions welcome! Please feel free to submit issues and pull requests.
+
+---
+
+## License
+
+MIT License
+
+---
+
+## Contact
+
+For questions or issues, please open an issue on GitHub.
