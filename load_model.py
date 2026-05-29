@@ -18,11 +18,24 @@ def hg_download(repo_id: str, local_dir: Path, hf_token: Optional[str] = None) -
         token=hf_token or None,
     )
 
+
 # Thêm decorator @click.command() vào đây
 @click.command()
-@click.option("--repo_id", type=str, required=True, help="HuggingFace repo ID (e.g., 'username/model-name')")
-@click.option("--local_dir", type=str, default="./model_path/model", help="Local directory to save model")
-@click.option("--hf_token", type=str, default=None, help="HuggingFace token for private models")
+@click.option(
+    "--repo_id",
+    type=str,
+    required=True,
+    help="HuggingFace repo ID (e.g., 'username/model-name')",
+)
+@click.option(
+    "--local_dir",
+    type=str,
+    default="./model_path/model",
+    help="Local directory to save model",
+)
+@click.option(
+    "--hf_token", type=str, default=None, help="HuggingFace token for private models"
+)
 def download_detection(repo_id: str, local_dir: str, hf_token: Optional[str] = None):
     """Download detection model from HuggingFace."""
     local_path = Path(local_dir)

@@ -2,7 +2,7 @@ from functools import partial
 from itertools import repeat
 
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
 
 def box_area(box):
@@ -31,7 +31,9 @@ def match_boxes(preds, references):
 
     sorted_indices = np.argsort(iou_matrix, axis=None)[::-1]
     sorted_ious = iou_matrix.flatten()[sorted_indices]
-    actual_indices, predicted_indices = np.unravel_index(sorted_indices, iou_matrix.shape)
+    actual_indices, predicted_indices = np.unravel_index(
+        sorted_indices, iou_matrix.shape
+    )
 
     assigned_actual = set()
     assigned_pred = set()
@@ -41,7 +43,7 @@ def match_boxes(preds, references):
         i, j = idx
         if i not in assigned_actual and j not in assigned_pred:
             iou_val = iou_matrix[i, j]
-            if iou_val > .95: # Account for rounding on box edges
+            if iou_val > 0.95:  # Account for rounding on box edges
                 iou_val = 1.0
             matches.append((i, j, iou_val))
             assigned_actual.add(i)
@@ -54,10 +56,12 @@ def match_boxes(preds, references):
 
     return matches
 
+
 def penalized_iou_score(preds, references):
     matches = match_boxes(preds, references)
     iou = sum([match[2] for match in matches]) / len(matches)
     return iou
+
 
 def intersection_pixels(box1, box2):
     x_left = max(box1[0], box2[0])
@@ -133,7 +137,7 @@ def calculate_coverage_fast(box, other_boxes, penalize_double=False):
     return min(1.0, total_intersect / box_area)
 
 
-def precision_recall(preds, references, threshold=.5, workers=8, penalize_double=True):
+def precision_recall(preds, references, threshold=0.5, workers=8, penalize_double=True):
     if len(references) == 0:
         return {
             "precision": 1,
@@ -207,114 +211,119 @@ def rank_accuracy(preds, references):
 
 # ==================== RECOGNITION METRICS ====================
 
+
 def character_error_rate(reference: str, hypothesis: str) -> float:
     """Calculate Character Error Rate (CER) using Levenshtein distance.
-    
+
     CER = (S + D + I) / N
     where:
         S = number of substitutions
         D = number of deletions
         I = number of insertions
         N = number of characters in reference
-    
+
     Args:
         reference: Ground truth text
         hypothesis: Predicted text
-    
+
     Returns:
         CER value between 0 and 1 (or higher if insertions exceed reference length)
     """
     if len(reference) == 0:
         return 0.0 if len(hypothesis) == 0 else 1.0
-    
+
     # Calculate Levenshtein distance
     d = np.zeros((len(reference) + 1, len(hypothesis) + 1), dtype=int)
     for i in range(len(reference) + 1):
         d[i][0] = i
     for j in range(len(hypothesis) + 1):
         d[0][j] = j
-    
+
     for i in range(1, len(reference) + 1):
         for j in range(1, len(hypothesis) + 1):
             if reference[i - 1] == hypothesis[j - 1]:
                 d[i][j] = d[i - 1][j - 1]
             else:
                 d[i][j] = 1 + min(d[i - 1][j], d[i][j - 1], d[i - 1][j - 1])
-    
+
     return d[len(reference)][len(hypothesis)] / len(reference)
 
 
 def word_error_rate(reference: str, hypothesis: str) -> float:
     """Calculate Word Error Rate (WER) using Levenshtein distance on words.
-    
+
     WER = (S + D + I) / N
     where words are separated by whitespace.
-    
+
     Args:
         reference: Ground truth text
         hypothesis: Predicted text
-    
+
     Returns:
         WER value between 0 and 1
     """
     ref_words = reference.split()
     hyp_words = hypothesis.split()
-    
+
     if len(ref_words) == 0:
         return 0.0 if len(hyp_words) == 0 else 1.0
-    
+
     # Calculate Levenshtein distance on words
     d = np.zeros((len(ref_words) + 1, len(hyp_words) + 1), dtype=int)
     for i in range(len(ref_words) + 1):
         d[i][0] = i
     for j in range(len(hyp_words) + 1):
         d[0][j] = j
-    
+
     for i in range(1, len(ref_words) + 1):
         for j in range(1, len(hyp_words) + 1):
             if ref_words[i - 1] == hyp_words[j - 1]:
                 d[i][j] = d[i - 1][j - 1]
             else:
                 d[i][j] = 1 + min(d[i - 1][j], d[i][j - 1], d[i - 1][j - 1])
-    
+
     return d[len(ref_words)][len(hyp_words)] / len(ref_words)
 
 
 def recognition_accuracy(references: list, hypotheses: list) -> float:
     """Calculate exact match accuracy for OCR recognition.
-    
+
     Accuracy = number of perfect matches / total number of samples
-    
+
     Args:
         references: List of ground truth texts
         hypotheses: List of predicted texts
-    
+
     Returns:
         Accuracy value between 0 and 1
     """
     if len(references) == 0:
         return 1.0
-    
+
     correct = sum(1 for ref, hyp in zip(references, hypotheses) if ref == hyp)
     return correct / len(references)
 
 
 def calculate_recognition_metrics(references: list, hypotheses: list) -> dict:
     """Calculate all recognition metrics at once.
-    
+
     Args:
         references: List of ground truth texts
         hypotheses: List of predicted texts
-    
+
     Returns:
         Dictionary with cer, wer, and accuracy
     """
     if len(references) != len(hypotheses):
-        raise ValueError(f"Length mismatch: {len(references)} references vs {len(hypotheses)} hypotheses")
-    
-    cer_scores = [character_error_rate(ref, hyp) for ref, hyp in zip(references, hypotheses)]
+        raise ValueError(
+            f"Length mismatch: {len(references)} references vs {len(hypotheses)} hypotheses"
+        )
+
+    cer_scores = [
+        character_error_rate(ref, hyp) for ref, hyp in zip(references, hypotheses)
+    ]
     wer_scores = [word_error_rate(ref, hyp) for ref, hyp in zip(references, hypotheses)]
-    
+
     return {
         "cer": np.mean(cer_scores) if cer_scores else 0.0,
         "wer": np.mean(wer_scores) if wer_scores else 0.0,

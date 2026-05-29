@@ -8,3 +8,5 @@ numpy
 fitz
 pymupdf
 rapidfuzz
+ruff
+black

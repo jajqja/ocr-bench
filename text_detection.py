@@ -1,8 +1,7 @@
-import argparse
 import collections
 import copy
 import json
-from typing import Optional, List, Tuple
+from typing import Optional, List
 
 import click
 
@@ -22,28 +21,46 @@ import datasets
 
 def calculate_iou_metrics(predictions: List[List], ground_truth: List[List]) -> float:
     """Calculate mean IOU score for detection.
-    
+
     Args:
         predictions: List of predicted bounding boxes [[x1,y1,x2,y2], ...]
         ground_truth: List of ground truth bounding boxes
-    
+
     Returns:
         Mean IOU score
     """
     if len(predictions) == 0 or len(ground_truth) == 0:
         return 0.0
-    
+
     return penalized_iou_score(predictions, ground_truth)
 
 
 @click.command(help="Benchmark detection model on PDF dataset.")
-@click.option("--pdf_path", type=str, help="Path to PDF to detect bboxes in.", default=None)
-@click.option("--dataset_name", type=str, help="Hugging Face dataset name.", default=None)
-@click.option("--results_dir", type=str, help="Path to directory for results.", default=os.path.join(settings.RESULT_DIR, "detection_benchmark"))
-@click.option("--max_rows", type=int, help="Maximum number of pages to process.", default=100)
+@click.option(
+    "--pdf_path", type=str, help="Path to PDF to detect bboxes in.", default=None
+)
+@click.option(
+    "--dataset_name", type=str, help="Hugging Face dataset name.", default=None
+)
+@click.option(
+    "--results_dir",
+    type=str,
+    help="Path to directory for results.",
+    default=os.path.join(settings.RESULT_DIR, "detection_benchmark"),
+)
+@click.option(
+    "--max_rows", type=int, help="Maximum number of pages to process.", default=100
+)
 @click.option("--debug", is_flag=True, help="Enable debug mode.", default=False)
 @click.option("--model_path", type=str, required=True, help="Path to detection model")
-def main(pdf_path: Optional[str], dataset_name: Optional[str], results_dir: str, max_rows: int, debug: bool, model_path: str):
+def main(
+    pdf_path: Optional[str],
+    dataset_name: Optional[str],
+    results_dir: str,
+    max_rows: int,
+    debug: bool,
+    model_path: str,
+):
     """Main benchmark function for detection."""
     det_predictor = DetectionPredictor(checkpoint=model_path)
 
@@ -70,7 +87,9 @@ def main(pdf_path: Optional[str], dataset_name: Optional[str], results_dir: str,
         for i, boxes in enumerate(dataset["bboxes"]):
             img_size = images[i].size
             # 1000,1000 is bbox size for doclaynet
-            correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
+            correct_boxes.append(
+                [rescale_bbox(b, (1000, 1000), img_size) for b in boxes]
+            )
     else:
         raise ValueError("Either pdf_path or dataset_name must be provided")
 
@@ -94,14 +113,14 @@ def main(pdf_path: Optional[str], dataset_name: Optional[str], results_dir: str,
     print("Calculating metrics...")
     page_metrics = collections.OrderedDict()
     iou_scores = []
-    
+
     for idx, (sb, cb) in enumerate(zip(predictions, correct_boxes)):
         surya_boxes = [s.bbox for s in sb.bboxes]
         surya_polys = [s.polygon for s in sb.bboxes]
 
         # Calculate precision and recall
         surya_metrics = precision_recall(surya_boxes, cb)
-        
+
         # Calculate IOU score
         iou = calculate_iou_metrics(surya_boxes, cb)
         iou_scores.append(iou)
@@ -136,7 +155,7 @@ def main(pdf_path: Optional[str], dataset_name: Optional[str], results_dir: str,
             "per_sample": inference_time / len(images),
         },
         "metrics": mean_metrics,
-        "page_metrics": page_metrics
+        "page_metrics": page_metrics,
     }
 
     with open(os.path.join(result_path, "results.json"), "w+", encoding="utf-8") as f:
@@ -145,23 +164,22 @@ def main(pdf_path: Optional[str], dataset_name: Optional[str], results_dir: str,
     # Print results
     table_headers = ["Model", "Time (s)", "Time per sample (s)"] + metric_types
     table_data = [
-        [
-            "surya", 
-            f"{inference_time:.2f}", 
-            f"{inference_time / len(images):.4f}"
-        ] + [f"{mean_metrics['surya'][m]:.4f}" for m in metric_types],
+        ["surya", f"{inference_time:.2f}", f"{inference_time / len(images):.4f}"]
+        + [f"{mean_metrics['surya'][m]:.4f}" for m in metric_types],
     ]
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("DETECTION METRICS")
-    print("="*70)
+    print("=" * 70)
     print(tabulate(table_data, headers=table_headers, tablefmt="github"))
-    
+
     print("\nMetric Descriptions:")
     print("  - Precision/Recall: Coverage threshold at 0.5")
     print("  - IOU: Intersection over Union (penalized for multiple overlapping boxes)")
-    print(f"  - Inference Time: {inference_time:.2f}s total, {inference_time/len(images):.4f}s per sample")
-    
+    print(
+        f"  - Inference Time: {inference_time:.2f}s total, {inference_time/len(images):.4f}s per sample"
+    )
+
     print(f"\n✓ Results saved to {result_path}")
 
 

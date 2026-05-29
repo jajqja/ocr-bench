@@ -4,8 +4,6 @@ Quick start script for OCR Benchmark
 Shows examples of how to use the benchmark suite
 """
 
-import subprocess
-import sys
 from pathlib import Path
 
 
@@ -18,23 +16,31 @@ def print_section(title):
 
 def main():
     """Show usage examples."""
-    
+
     print_section("OCR Benchmark Suite - Quick Start Guide")
-    
+
     # Detect if models exist
     detection_model_exists = Path("./model_path/detection").exists()
     recognition_model_exists = Path("./model_path/recognition").exists()
     sample_pdf = Path("./sample.pdf").exists()
-    
+
     print("📋 System Check:")
-    print(f"  ✓ Detection model found" if detection_model_exists else "  ✗ Detection model NOT found")
-    print(f"  ✓ Recognition model found" if recognition_model_exists else "  ✗ Recognition model NOT found")
-    print(f"  ✓ Sample PDF found" if sample_pdf else "  ✗ Sample PDF NOT found")
-    
-    print("\n" + "="*70)
+    print(
+        "  ✓ Detection model found"
+        if detection_model_exists
+        else "  ✗ Detection model NOT found"
+    )
+    print(
+        "  ✓ Recognition model found"
+        if recognition_model_exists
+        else "  ✗ Recognition model NOT found"
+    )
+    print("  ✓ Sample PDF found" if sample_pdf else "  ✗ Sample PDF NOT found")
+
+    print("\n" + "=" * 70)
     print("NEXT STEPS")
-    print("="*70)
-    
+    print("=" * 70)
+
     if not detection_model_exists or not recognition_model_exists:
         print_section("Step 1: Download Models")
         print("Option A - From HuggingFace Hub:")
@@ -45,23 +51,23 @@ python -m load_model download-detection \\
 python -m load_model download-recognition \\
   --repo_id jajqja/surya-recognition
         """)
-        
+
         print("\nOption B - From Local Storage:")
         print("""
 # Just point to your local model directory
 # The models will be used from: ./model_path/detection and ./model_path/recognition
         """)
-        
+
         print("\nVerify models are loaded:")
         print("""
 python -m load_model verify-models \\
   --detection_model ./model_path/detection \\
   --recognition_model ./model_path/recognition
         """)
-    
+
     if sample_pdf:
         print_section("Step 2: Run Benchmark on PDF")
-        print(f"""
+        print("""
 python benchmark.py benchmark-pdf \\
   --pdf_path ./sample.pdf \\
   --detection_model ./model_path/detection \\
@@ -71,7 +77,7 @@ python benchmark.py benchmark-pdf \\
         """)
     else:
         print_section("Step 2: Prepare Your PDF")
-        print(f"""
+        print("""
 Place your PDF file in the project directory or specify the full path:
 
 python benchmark.py benchmark-pdf \\
@@ -80,7 +86,7 @@ python benchmark.py benchmark-pdf \\
   --recognition_model ./model_path/recognition \\
   --max_pages 100
         """)
-    
+
     print_section("Step 3: View Results")
     print("""
 Results are saved in ./results/ directory:
@@ -93,7 +99,7 @@ Results are saved in ./results/ directory:
 View summary:
 python benchmark.py compare-results --results_dir ./results
     """)
-    
+
     print_section("Step 4: (Optional) Run Individual Benchmarks")
     print("""
 # Detection only
@@ -107,7 +113,7 @@ python -m text_recognition \\
   --pdf_path document.pdf \\
   --model_path ./model_path/recognition
     """)
-    
+
     print_section("Common Commands Reference")
     print("""
 # List all available commands
@@ -136,7 +142,7 @@ python benchmark.py benchmark-pdf \\
   --recognition_model username/private-model \\
   --hf_token your_token
     """)
-    
+
     print_section("Metrics Explained")
     print("""
 DETECTION METRICS:
@@ -149,7 +155,7 @@ RECOGNITION METRICS:
   • WER (Word Error Rate): Levenshtein distance at word level
   • Accuracy: Exact match rate (% perfectly correct)
     """)
-    
+
     print_section("For More Information")
     print("""
 📖 See README.md for:
@@ -168,7 +174,7 @@ RECOGNITION METRICS:
       --recognition_model ./model_path/recognition
    3. python benchmark.py compare-results --results_dir ./results
     """)
-    
+
     print("\n✨ Ready to benchmark! Start with Step 1 above.\n")
 
 
