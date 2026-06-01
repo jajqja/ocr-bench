@@ -54,13 +54,13 @@ You can edit scripts from `model_download.py`
 
 ```bash
 # Download detection model
-python model_download \
+python ocr-bench/model_download \
   --repo_id username/detection-model \
   --local_dir model_path/textdetection \
   --hf_token hf_*************
 
 # Download recognition model
-python model_download \
+python ocr-bench/model_download \
   --repo_id username/recognition-model \
   --local_dir model_path/textrecognition \
   --hf_token hf_*************
@@ -70,7 +70,7 @@ python model_download \
 
 ```bash
 # Full benchmark (detection + recognition)
-python benchmark.py benchmark-pdf \
+python ocr-bench/benchmark.py benchmark-pdf \
   --pdf_path /path/to/document.pdf \
   --detection_model /path/to/detection/model \
   --recognition_model /path/to/recognition/model \
@@ -82,7 +82,7 @@ python benchmark.py benchmark-pdf \
 ### 3. Run Individual Benchmarks
 #### 3.1 Digital pdf file
 ```bash
-python -m text_detection \
+python -m ocr-bench/text_detection \
   --pdf_path /path/to/document.pdf \
   --model_path /path/to/detection/model \
   --max_rows 100 \
@@ -91,7 +91,7 @@ python -m text_detection \
 ```
 
 ```bash
-python -m text_recognition \
+python -m ocr-bench/text_recognition \
   --pdf_path /path/to/document.pdf \
   --model_path /path/to/recognition/model \
   --max_rows 100 \
@@ -100,7 +100,7 @@ python -m text_recognition \
 
 #### 3.2 Data line folder (for recognition only)
 ```bash
-python -m text_recognition \
+python -m ocr-bench/text_recognition \
   --data_dir /datadir \
   --image_folder images \
   --label_file labels.txt \
@@ -113,12 +113,12 @@ python -m text_recognition \
 
 ```bash
 # Benchmark on HuggingFace dataset
-python -m text_detection \
+python -m ocr-bench/text_detection \
   --dataset_name mnist-ocr-digits \
   --model_path ./detection_model \
   --max_rows 1000
 
-python -m text_recognition \
+python -m ocr-bench/text_recognition \
   --dataset_name ocr-text-recognition \
   --model_path ./recognition_model \
   --max_rows 1000
@@ -127,7 +127,7 @@ python -m text_recognition \
 ### 4. Compare Results
 
 ```bash
-python benchmark.py compare-results --results_dir ./results
+python ocr-bench/benchmark.py compare-results --results_dir ./results
 ```
 
 ---
@@ -216,13 +216,14 @@ python -m text_detection \
 
 ```
 ocr-bench/
-├── model_download.py          # Model download utilities & CLI
-├── text_detection.py          # Detection benchmark script
-├── text_recognition.py        # Recognition benchmark script
-├── benchmark.py               # Main unified benchmark CLI
-├── utils/
-│   ├── metrics.py             # Metric calculations (IOU, CER, WER, etc.)
-│   ├── bbox.py                # Bounding box utilities
+├── ocr-bench/          # Model download utilities & CLI
+│   ├── model_download.py          # Model download utilities & CLI
+│   ├── text_detection.py          # Detection benchmark script
+│   ├── text_recognition.py        # Recognition benchmark script
+│   ├── benchmark.py               # Main unified benchmark CLI
+│   ├── utils/
+│   │   ├── metrics.py             # Metric calculations (IOU, CER, WER, etc.)
+│   │   ├── bbox.py                # Bounding box utilities
 ├── requirements.txt           # Python dependencies
 └── README.md                  # This file
 ```
@@ -245,22 +246,22 @@ ocr-bench/
 
 ```bash
 # Main benchmark help
-python benchmark.py --help
+python ocr-bench/benchmark.py --help
 
 # Individual command help
-python benchmark.py benchmark-pdf --help
-python benchmark.py benchmark-dataset --help
-python benchmark.py verify-models --help
-python benchmark.py compare-results --help
+python ocr-bench/benchmark.py benchmark-pdf --help
+python ocr-bench/benchmark.py benchmark-dataset --help
+python ocr-bench/benchmark.py verify-models --help
+python ocr-bench/benchmark.py compare-results --help
 
 # Model loading help
-python -m load_model --help
+python -m ocr-bench/model_download --help
 
 # Detection benchmark help
-python -m text_detection --help
+python -m ocr-bench/text_detection --help
 
 # Recognition benchmark help
-python -m text_recognition --help
+python -m ocr-bench/text_recognition --help
 ```
 
 ---
@@ -270,7 +271,7 @@ python -m text_recognition --help
 ### Model not found error
 ```bash
 # Verify models can be loaded
-python benchmark.py verify-models \
+python ocr-bench/benchmark.py verify-models \
   --detection_model /path/to/model \
   --recognition_model /path/to/model
 ```
@@ -278,7 +279,7 @@ python benchmark.py verify-models \
 ### Out of memory errors
 Reduce batch size or max_rows:
 ```bash
-python -m text_recognition \
+python -m ocr-bench/text_recognition \
   --pdf_path document.pdf \
   --model_path ./model \
   --max_rows 10 \
@@ -304,5 +305,5 @@ python -c "import fitz; doc = fitz.open('document.pdf'); print(f'Pages: {len(doc
 !pip install -r requirements.txt
 
 # Run benchmark
-!python -m text_detection --pdf_path sample.pdf --model_path ./model
+!python -m ocr-bench/text_detection --pdf_path sample.pdf --model_path ./model
 ```
