@@ -7,6 +7,7 @@ from typing import Optional, List, Tuple
 
 from PIL import Image
 from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
+from surya.common.util import rescale_bbox
 from surya.settings import settings
 from surya.recognition import RecognitionPredictor
 from surya.foundation import FoundationPredictor
@@ -16,15 +17,15 @@ import datasets
 from utils.metrics import calculate_recognition_metrics
 
 
-def extract_text_from_pdf(pdf_path: str, max_pages: int = 100) -> Tuple[List, List]:
-    """Extract text from PDF using PyMuPDF.
+def extract_text_from_pdf(pdf_path: str, max_pages: int = 100) -> Tuple[List, List, List]:
+    """Extract text lines and bboxes from PDF using PyMuPDF.
 
     Args:
         pdf_path: Path to PDF file
         max_pages: Maximum number of pages to extract
 
     Returns:
-        Tuple of (images, ground_truth_texts)
+        Tuple of (page_images, text_line_ground_truths, page_text_line_bboxes)
     """
     doc = open_pdf(pdf_path)
     page_count = min(len(doc), max_pages)
@@ -33,20 +34,43 @@ def extract_text_from_pdf(pdf_path: str, max_pages: int = 100) -> Tuple[List, Li
     images = get_page_images(doc, page_indices)
     images = convert_if_not_rgb(images)
 
-    # Extract ground truth text using PyMuPDF
     ground_truth_texts = []
-    for idx in page_indices:
+    page_bboxes = []
+    for idx, image in zip(page_indices, images):
         page = doc[idx]
-        text = page.get_text()
-        ground_truth_texts.append(text)
+        blocks = page.get_text("dict", sort=True)["blocks"]
+        page_box = page.bound()
+        page_size = (page_box[2] - page_box[0], page_box[3] - page_box[1])
+
+        line_bboxes = []
+        for block in blocks:
+            for line in block.get("lines", []):
+                text = "".join(span.get("text", "") for span in line.get("spans", []))
+                if not text.strip():
+                    continue
+
+                ground_truth_texts.append(text)
+                line_bboxes.append(
+                    [
+                        int(round(value))
+                        for value in rescale_bbox(line["bbox"], page_size, image.size)
+                    ]
+                )
+
+        page_bboxes.append(line_bboxes)
 
     doc.close()
-    return images, ground_truth_texts
+    return images, ground_truth_texts, page_bboxes
+
+
+def get_full_image_bboxes(images: List) -> List[List[List[int]]]:
+    """Create one full-image bbox per image for recognition datasets."""
+    return [[[0, 0, image.size[0], image.size[1]]] for image in images]
 
 
 def load_recognition_dataset(
     dataset_name: str, max_rows: int = 100
-) -> Tuple[List, List]:
+) -> Tuple[List, List, List]:
     """Load recognition dataset from Hugging Face.
 
     Args:
@@ -60,12 +84,13 @@ def load_recognition_dataset(
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
     texts = list(dataset["text"])
-    return images, texts
+    bboxes = get_full_image_bboxes(images)
+    return images, texts, bboxes
 
 
 def load_recognition_folder(
     data_dir: str, image_folder: str, label_file: str, max_rows: int = 100
-) -> Tuple[List, List]:
+) -> Tuple[List, List, List]:
     """Load recognition dataset from a local folder.
 
     Expected structure:
@@ -127,26 +152,35 @@ def load_recognition_folder(
             texts.append(label)
 
     images = convert_if_not_rgb(images)
-    return images, texts
+    bboxes = get_full_image_bboxes(images)
+    return images, texts, bboxes
 
 
-def batch_recognize(predictor, images: List, batch_size: int = 8) -> List[str]:
+def batch_recognize(
+    predictor, images: List, bboxes: List[List[List[int]]], batch_size: int = 8
+) -> List[str]:
     """Recognize text from images in batches.
 
     Args:
         predictor: Recognition predictor model
         images: List of PIL images
+        bboxes: List of textline bboxes per image
         batch_size: Batch size for processing
 
     Returns:
-        List of recognized texts
+        Flattened list of recognized text lines
     """
     predictions = []
     for i in range(0, len(images), batch_size):
         batch = images[i : i + batch_size]
-        batch_results = predictor(batch)
+        batch_bboxes = bboxes[i : i + batch_size]
+        batch_results = predictor(
+            batch,
+            bboxes=batch_bboxes,
+            recognition_batch_size=batch_size,
+        )
         for result in batch_results:
-            predictions.append(result.text)
+            predictions.extend(text_line.text for text_line in result.text_lines)
     return predictions
 
 
@@ -208,26 +242,31 @@ def main(
     if pdf_path is not None:
         print(f"Loading data from PDF: {pdf_path}")
         pathname = Path(pdf_path).stem
-        images, ground_truth_texts = extract_text_from_pdf(pdf_path, max_rows)
+        images, ground_truth_texts, bboxes = extract_text_from_pdf(pdf_path, max_rows)
     elif dataset_name is not None:
         print(f"Loading dataset: {dataset_name}")
         pathname = dataset_name
-        images, ground_truth_texts = load_recognition_dataset(dataset_name, max_rows)
+        images, ground_truth_texts, bboxes = load_recognition_dataset(
+            dataset_name, max_rows
+        )
     elif data_dir is not None:
         print(f"Loading local dataset: {data_dir}")
         pathname = Path(data_dir).name
-        images, ground_truth_texts = load_recognition_folder(
+        images, ground_truth_texts, bboxes = load_recognition_folder(
             data_dir, image_folder or "images", label_file or "labels.txt", max_rows
         )
     else:
         raise ValueError("Either pdf_path, dataset_name, or data_dir must be provided")
 
-    print(f"Loaded {len(images)} images")
+    flat_bboxes = [bbox for image_bboxes in bboxes for bbox in image_bboxes]
+    sample_count = len(ground_truth_texts)
+
+    print(f"Loaded {len(images)} images and {sample_count} text lines")
 
     # Run inference
     print("Running inference...")
     start_time = time.time()
-    predictions = batch_recognize(rec_predictor, images, batch_size)
+    predictions = batch_recognize(rec_predictor, images, bboxes, batch_size)
     inference_time = time.time() - start_time
 
     print(
@@ -245,9 +284,10 @@ def main(
     output_data = {
         "model": model_path,
         "dataset": pathname,
-        "num_samples": len(images),
+        "num_samples": sample_count,
+        "num_images": len(images),
         "inference_time_total": inference_time,
-        "inference_time_per_sample": inference_time / len(images),
+        "inference_time_per_sample": inference_time / sample_count if sample_count else 0,
         "metrics": {
             "cer": metrics["cer"],
             "wer": metrics["wer"],
@@ -257,6 +297,7 @@ def main(
             {
                 "ground_truth": gt,
                 "prediction": pred,
+                "bbox": flat_bboxes[i],
                 "cer": metrics["cer_scores"][i],
                 "wer": metrics["wer_scores"][i],
             }
@@ -273,7 +314,10 @@ def main(
         ["Word Error Rate (WER)", f"{metrics['wer']:.4f}"],
         ["Accuracy (exact match)", f"{metrics['accuracy']:.4f}"],
         ["Inference Time (total)", f"{inference_time:.2f}s"],
-        ["Inference Time (per sample)", f"{inference_time/len(images):.4f}s"],
+        [
+            "Inference Time (per text line)",
+            f"{inference_time / sample_count if sample_count else 0:.4f}s",
+        ],
     ]
 
     print("\n" + "=" * 50)

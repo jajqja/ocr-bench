@@ -1,4 +1,4 @@
-import fitz as pymupdf
+import pymupdf
 from surya.common.util import rescale_bbox
 
 

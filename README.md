@@ -54,13 +54,13 @@ You can edit scripts from `model_download.py`
 
 ```bash
 # Download detection model
-python ocr-bench/model_download \
+python -m ocr-bench/model_download \
   --repo_id username/detection-model \
   --local_dir model_path/textdetection \
   --hf_token hf_*************
 
 # Download recognition model
-python ocr-bench/model_download \
+python -m ocr-bench/model_download \
   --repo_id username/recognition-model \
   --local_dir model_path/textrecognition \
   --hf_token hf_*************
