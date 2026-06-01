@@ -1,5 +1,4 @@
-
-## OCR Benchmark Suite
+# Surya OCR Benchmark Suite
 
 A comprehensive benchmarking suite for evaluating OCR models (Text Detection & Text Recognition) on PDF datasets.
 
@@ -224,8 +223,6 @@ ocr-bench/
 ├── utils/
 │   ├── metrics.py             # Metric calculations (IOU, CER, WER, etc.)
 │   ├── bbox.py                # Bounding box utilities
-│   ├── scoring.py             # Text scoring utilities
-│   └── tatr.py                # Table recognition utilities
 ├── requirements.txt           # Python dependencies
 └── README.md                  # This file
 ```
