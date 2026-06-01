@@ -85,9 +85,13 @@ def load_recognition_dataset(
     dataset = datasets.load_dataset(dataset_name, split=f"train[:{max_rows}]")
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
-    texts = list(dataset["text"])
-    bboxes = get_full_image_bboxes(images)
-    return images, texts, bboxes
+    texts = list(dataset["words"])
+    correct_boxes = []
+    for i, boxes in enumerate(dataset["bboxes"]):
+        img_size = images[i].size
+        # 1000,1000 is bbox size for doclaynet
+        correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
+    return images, texts, correct_boxes
 
 
 def load_recognition_folder(
@@ -245,7 +249,7 @@ def main(
         print(f"Loading data from PDF: {pdf_path}")
         pathname = Path(pdf_path).stem
         images, ground_truth_texts, bboxes = extract_text_from_pdf(pdf_path, max_rows)
-    elif dataset_name is not None:
+    elif dataset_name is not None and dataset_name == "vikp/doclaynet_bench":
         print(f"Loading dataset: {dataset_name}")
         pathname = dataset_name
         images, ground_truth_texts, bboxes = load_recognition_dataset(
@@ -261,7 +265,10 @@ def main(
         raise ValueError("Either pdf_path, dataset_name, or data_dir must be provided")
 
     flat_bboxes = [bbox for image_bboxes in bboxes for bbox in image_bboxes]
-    sample_count = len(ground_truth_texts)
+    sample_count = 0
+
+    for image_bboxes in bboxes:
+        sample_count += len(image_bboxes)
 
     print(f"Loaded {len(images)} images and {sample_count} text lines")
 

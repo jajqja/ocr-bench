@@ -62,7 +62,7 @@ def main(
 
         image_sizes = [img.size for img in images]
         correct_boxes = get_pdf_lines(pdf_path, image_sizes)
-    elif dataset_name is not None:
+    elif dataset_name is not None and dataset_name == "vikp/doclaynet_bench":
         print(f"Loading dataset: {dataset_name}")
         pathname = dataset_name
         dataset = datasets.load_dataset(dataset_name, split=f"train[:{max_rows}]")
