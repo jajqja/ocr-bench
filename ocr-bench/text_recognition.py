@@ -17,7 +17,9 @@ import datasets
 from utils.metrics import calculate_recognition_metrics
 
 
-def extract_text_from_pdf(pdf_path: str, max_pages: int = 100) -> Tuple[List, List, List]:
+def extract_text_from_pdf(
+    pdf_path: str, max_pages: int = 100
+) -> Tuple[List, List, List]:
     """Extract text lines and bboxes from PDF using PyMuPDF.
 
     Args:
@@ -287,7 +289,9 @@ def main(
         "num_samples": sample_count,
         "num_images": len(images),
         "inference_time_total": inference_time,
-        "inference_time_per_sample": inference_time / sample_count if sample_count else 0,
+        "inference_time_per_sample": (
+            inference_time / sample_count if sample_count else 0
+        ),
         "metrics": {
             "cer": metrics["cer"],
             "wer": metrics["wer"],
