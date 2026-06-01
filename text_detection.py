@@ -120,7 +120,8 @@ def main(
         surya_polys = [s.polygon for s in sb.bboxes]
 
         # Calculate precision and recall
-        surya_metrics = precision_recall(surya_boxes, cb)
+        raw_metrics = precision_recall(surya_boxes, cb)
+        surya_metrics = {k: float(v) for k, v in raw_metrics.items()}
 
         # Calculate IOU score
         iou = calculate_iou_metrics(surya_boxes, cb)

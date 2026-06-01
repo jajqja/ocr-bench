@@ -5,9 +5,11 @@ import time
 from pathlib import Path
 from typing import Optional, List, Tuple
 
+from PIL import Image
 from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
 from surya.settings import settings
 from surya.recognition import RecognitionPredictor
+from surya.foundation import FoundationPredictor
 from tabulate import tabulate
 import datasets
 
@@ -61,6 +63,71 @@ def load_recognition_dataset(
     return images, texts
 
 
+
+def load_recognition_folder(data_dir: str, image_folder: str, label_file: str, max_rows: int = 100) -> Tuple[List, List]:
+    """Load recognition dataset from a local folder.
+
+    Expected structure:
+        data_dir/
+            images/
+                image_1.jpg
+                image_2.png
+            labels.txt
+
+    labels.txt format:
+        image_1.jpg<TAB>label text
+        image_2.png<TAB>another label
+
+    Args:
+        data_dir: Path to folder containing images/ and labels.txt
+        image_folder: Name of the folder containing images
+        label_file: Name of the labels file
+        max_rows: Maximum number of samples
+
+    Returns:
+        Tuple of (images, texts)
+    """
+    data_path = Path(data_dir)
+    images_dir = data_path / image_folder
+    labels_path = data_path / label_file
+
+    if not images_dir.is_dir():
+        raise FileNotFoundError(f"Images directory not found: {images_dir}")
+    if not labels_path.is_file():
+        raise FileNotFoundError(f"Labels file not found: {labels_path}")
+
+    images = []
+    texts = []
+    with labels_path.open("r", encoding="utf-8") as f:
+        for line_number, line in enumerate(f, start=1):
+            if len(images) >= max_rows:
+                break
+
+            line = line.rstrip("\n")
+            if not line:
+                continue
+
+            parts = line.split("\t", 1)
+            if len(parts) != 2:
+                raise ValueError(
+                    f"Invalid labels.txt format at line {line_number}: "
+                    "expected '<image_name>\t<label>'"
+                )
+
+            image_name, label = parts
+            image_path = images_dir / image_name
+            if not image_path.is_file():
+                raise FileNotFoundError(
+                    f"Image not found for labels.txt line {line_number}: {image_path}"
+                )
+
+            with Image.open(image_path) as image:
+                images.append(image.copy())
+            texts.append(label)
+
+    images = convert_if_not_rgb(images)
+    return images, texts
+
 def batch_recognize(predictor, images: List, batch_size: int = 8) -> List[str]:
     """Recognize text from images in batches.
 
@@ -89,6 +156,24 @@ def batch_recognize(predictor, images: List, batch_size: int = 8) -> List[str]:
     "--dataset_name", type=str, help="Hugging Face dataset name.", default=None
 )
 @click.option(
+    "--data_dir",
+    type=str,
+    help="Path to local recognition dataset folder with images/ and labels.txt.",
+    default=None,
+)
+@click.option(
+    "--image_folder",
+    type=str,
+    help="Name of the folder containing images.",
+    default="images",
+)
+@click.option(
+    "--label_file",
+    type=str,
+    help="Name of the labels file.",
+    default="labels.txt",
+)
+@click.option(
     "--results_dir",
     type=str,
     help="Path to directory for results.",
@@ -102,6 +187,9 @@ def batch_recognize(predictor, images: List, batch_size: int = 8) -> List[str]:
 def main(
     pdf_path: Optional[str],
     dataset_name: Optional[str],
+    data_dir: Optional[str],
+    image_folder: Optional[str],
+    label_file: Optional[str],
     results_dir: str,
     max_rows: int,
     batch_size: int,
@@ -111,7 +199,8 @@ def main(
 
     # Load model
     print(f"Loading recognition model from {model_path}...")
-    rec_predictor = RecognitionPredictor(checkpoint=model_path)
+    foundation_model = FoundationPredictor(checkpoint=model_path)
+    rec_predictor = RecognitionPredictor(foundation_model)
 
     # Load data
     if pdf_path is not None:
@@ -122,8 +211,14 @@ def main(
         print(f"Loading dataset: {dataset_name}")
         pathname = dataset_name
         images, ground_truth_texts = load_recognition_dataset(dataset_name, max_rows)
+    elif data_dir is not None:
+        print(f"Loading local dataset: {data_dir}")
+        pathname = Path(data_dir).name
+        images, ground_truth_texts = load_recognition_folder(
+            data_dir, image_folder or "images", label_file or "labels.txt", max_rows
+        )
     else:
-        raise ValueError("Either pdf_path or dataset_name must be provided")
+        raise ValueError("Either pdf_path, dataset_name, or data_dir must be provided")
 
     print(f"Loaded {len(images)} images")
 

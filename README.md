@@ -67,7 +67,7 @@ python model_download \
   
 ```
 
-### 2. Run Benchmark on PDF
+### 2. Run Benchmark on Digital PDF file
 
 ```bash
 # Full benchmark (detection + recognition)
@@ -81,8 +81,7 @@ python benchmark.py benchmark-pdf \
 ```
 
 ### 3. Run Individual Benchmarks
-
-#### Detection Only
+#### 3.1 Digital pdf file
 ```bash
 python -m text_detection \
   --pdf_path /path/to/document.pdf \
@@ -92,13 +91,38 @@ python -m text_detection \
   --debug  # (optional) save visualization images
 ```
 
-#### Recognition Only
 ```bash
 python -m text_recognition \
   --pdf_path /path/to/document.pdf \
   --model_path /path/to/recognition/model \
   --max_rows 100 \
   --results_dir ./recognition_results
+```
+
+#### 3.2 Data line folder (for recognition only)
+```bash
+python -m text_recognition \
+  --data_dir /datadir \
+  --image_folder images \
+  --label_file labels.txt \
+  --max_rows 1000 \
+  --model_path /path/to/recognition/model \
+  --results_dir ./recognition_results
+```
+
+#### 3.3 Using with HuggingFace Datasets
+
+```bash
+# Benchmark on HuggingFace dataset
+python -m text_detection \
+  --dataset_name mnist-ocr-digits \
+  --model_path ./detection_model \
+  --max_rows 1000
+
+python -m text_recognition \
+  --dataset_name ocr-text-recognition \
+  --model_path ./recognition_model \
+  --max_rows 1000
 ```
 
 ### 4. Compare Results
@@ -177,21 +201,6 @@ results/
 ---
 
 ## Advanced Usage
-
-### Using with HuggingFace Datasets
-
-```bash
-# Benchmark on HuggingFace dataset
-python -m text_detection \
-  --dataset_name mnist-ocr-digits \
-  --model_path ./detection_model \
-  --max_rows 1000
-
-python -m text_recognition \
-  --dataset_name ocr-text-recognition \
-  --model_path ./recognition_model \
-  --max_rows 1000
-```
 
 ### Debug Mode with Visualizations
 
@@ -300,15 +309,3 @@ python -c "import fitz; doc = fitz.open('document.pdf'); print(f'Pages: {len(doc
 # Run benchmark
 !python -m text_detection --pdf_path sample.pdf --model_path ./model
 ```
-
----
-
-## License
-
-MIT License
-
----
-
-## Contact
-
-For questions or issues, please open an issue on GitHub.
