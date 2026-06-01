@@ -1,12 +1,12 @@
 import collections
 import copy
 import json
-from typing import Optional, List
+from typing import Optional
 
 import click
 
 from utils.bbox import get_pdf_lines
-from utils.metrics import precision_recall, penalized_iou_score
+from utils.metrics import precision_recall, calculate_iou_metrics
 from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
 from surya.debug.draw import draw_polys_on_image
 from surya.common.util import rescale_bbox
@@ -17,22 +17,6 @@ import os
 import time
 from tabulate import tabulate
 import datasets
-
-
-def calculate_iou_metrics(predictions: List[List], ground_truth: List[List]) -> float:
-    """Calculate mean IOU score for detection.
-
-    Args:
-        predictions: List of predicted bounding boxes [[x1,y1,x2,y2], ...]
-        ground_truth: List of ground truth bounding boxes
-
-    Returns:
-        Mean IOU score
-    """
-    if len(predictions) == 0 or len(ground_truth) == 0:
-        return 0.0
-
-    return penalized_iou_score(predictions, ground_truth)
 
 
 @click.command(help="Benchmark detection model on PDF dataset.")

@@ -63,8 +63,9 @@ def load_recognition_dataset(
     return images, texts
 
 
-
-def load_recognition_folder(data_dir: str, image_folder: str, label_file: str, max_rows: int = 100) -> Tuple[List, List]:
+def load_recognition_folder(
+    data_dir: str, image_folder: str, label_file: str, max_rows: int = 100
+) -> Tuple[List, List]:
     """Load recognition dataset from a local folder.
 
     Expected structure:
@@ -127,6 +128,7 @@ def load_recognition_folder(data_dir: str, image_folder: str, label_file: str, m
 
     images = convert_if_not_rgb(images)
     return images, texts
+
 
 def batch_recognize(predictor, images: List, batch_size: int = 8) -> List[str]:
     """Recognize text from images in batches.

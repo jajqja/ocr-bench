@@ -1,5 +1,6 @@
 from functools import partial
 from itertools import repeat
+from typing import List
 
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
@@ -7,6 +8,22 @@ from concurrent.futures import ThreadPoolExecutor
 
 def box_area(box):
     return (box[2] - box[0]) * (box[3] - box[1])
+
+
+def calculate_iou_metrics(predictions: List[List], ground_truth: List[List]) -> float:
+    """Calculate mean IOU score for detection.
+
+    Args:
+        predictions: List of predicted bounding boxes [[x1,y1,x2,y2], ...]
+        ground_truth: List of ground truth bounding boxes
+
+    Returns:
+        Mean IOU score
+    """
+    if len(predictions) == 0 or len(ground_truth) == 0:
+        return 0.0
+
+    return penalized_iou_score(predictions, ground_truth)
 
 
 def calculate_iou(box1, box2, box1_only=False):
