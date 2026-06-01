@@ -2,7 +2,7 @@
 
 A comprehensive benchmarking suite for evaluating OCR models (Text Detection & Text Recognition) on PDF datasets.
 
-### Features
+## Features
 
 ✅ **Text Detection Evaluation**
 - Precision & Recall metrics
@@ -57,13 +57,13 @@ You can edit scripts from `model_download.py`
 python model_download \
   --repo_id username/detection-model \
   --local_dir model_path/textdetection \
-  --hf_token hf_**************
+  --hf_token hf_*************
 
 # Download recognition model
 python model_download \
   --repo_id username/recognition-model \
   --local_dir model_path/textrecognition \
-  
+  --hf_token hf_*************
 ```
 
 ### 2. Run Benchmark on Digital PDF file
@@ -216,7 +216,7 @@ python -m text_detection \
 
 ```
 ocr-bench/
-├── load_model.py              # Model loading utilities & CLI
+├── model_download.py          # Model download utilities & CLI
 ├── text_detection.py          # Detection benchmark script
 ├── text_recognition.py        # Recognition benchmark script
 ├── benchmark.py               # Main unified benchmark CLI
