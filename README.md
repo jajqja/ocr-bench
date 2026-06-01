@@ -49,22 +49,22 @@ pip install -r requirements.txt
 
 ### 1. Load Models
 
-#### Option A: Load from Local Storage
-```bash
-python -m load_model verify-models \
-  --detection_model ./path/to/detection/model \
-  --recognition_model ./path/to/recognition/model
-```
+#### Option: Download from HuggingFace
 
-#### Option B: Download from HuggingFace
+You can edit scripts from `model_download.py`
+
 ```bash
 # Download detection model
-python -m load_model download-detection \
-  --repo_id username/detection-model
+python model_download \
+  --repo_id username/detection-model \
+  --local_dir model_path/textdetection \
+  --hf_token hf_**************
 
 # Download recognition model
-python -m load_model download-recognition \
-  --repo_id username/recognition-model
+python model_download \
+  --repo_id username/recognition-model \
+  --local_dir model_path/textrecognition \
+  
 ```
 
 ### 2. Run Benchmark on PDF
@@ -78,11 +78,6 @@ python benchmark.py benchmark-pdf \
   --max_pages 100 \
   --results_dir ./results
 
-# Or use HuggingFace models
-python benchmark.py benchmark-pdf \
-  --pdf_path /path/to/document.pdf \
-  --detection_model username/detection-model \
-  --recognition_model username/recognition-model
 ```
 
 ### 3. Run Individual Benchmarks
@@ -198,16 +193,6 @@ python -m text_recognition \
   --max_rows 1000
 ```
 
-### Private Models with HuggingFace Token
-
-```bash
-python benchmark.py benchmark-pdf \
-  --pdf_path document.pdf \
-  --detection_model username/private-detection \
-  --recognition_model username/private-recognition \
-  --hf_token your_hf_token
-```
-
 ### Debug Mode with Visualizations
 
 ```bash
@@ -315,27 +300,6 @@ python -c "import fitz; doc = fitz.open('document.pdf'); print(f'Pages: {len(doc
 # Run benchmark
 !python -m text_detection --pdf_path sample.pdf --model_path ./model
 ```
-
----
-
-## Citation
-
-If you use this benchmark suite in your research, please cite:
-
-```bibtex
-@software{ocr_bench,
-  title = {OCR Benchmark Suite},
-  author = {...},
-  year = {2024},
-  url = {https://github.com/jajqja/ocr-bench}
-}
-```
-
----
-
-## Contributing
-
-Contributions welcome! Please feel free to submit issues and pull requests.
 
 ---
 

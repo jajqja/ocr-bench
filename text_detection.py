@@ -60,6 +60,7 @@ def main(
     max_rows: int,
     debug: bool,
     model_path: str,
+    hf_token: Optional[str] = None,
 ):
     """Main benchmark function for detection."""
     det_predictor = DetectionPredictor(checkpoint=model_path)

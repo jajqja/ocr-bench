@@ -60,8 +60,8 @@ def benchmark_pdf(
     recognition_model: str,
     results_dir: str,
     max_pages: int,
-    hf_token: Optional[str],
     debug: bool,
+    hf_token: Optional[str] = None,
 ):
     """Run full benchmark on a PDF file."""
 
@@ -97,6 +97,8 @@ def benchmark_pdf(
                 str(max_pages),
                 "--model_path",
                 detection_model,
+                "--hf_token",
+                hf_token,
                 "--debug" if debug else "",
             ]
         )
@@ -119,6 +121,8 @@ def benchmark_pdf(
                 str(max_pages),
                 "--model_path",
                 recognition_model,
+                "--hf_token",
+                hf_token,
             ]
         )
     except Exception as e:
@@ -290,14 +294,14 @@ def verify_models(
     click.echo("\n📦 Verifying models...")
 
     try:
-        from load_model import load_detection_model, load_recognition_model
+        from model_download import download
 
         click.echo(f"Loading detection model: {detection_model}")
-        load_detection_model(detection_model, hf_token)
+        download(detection_model, hf_token)
         click.echo("✓ Detection model loaded successfully")
 
         click.echo(f"Loading recognition model: {recognition_model}")
-        load_recognition_model(recognition_model, hf_token)
+        download(recognition_model, hf_token)
         click.echo("✓ Recognition model loaded successfully")
 
         click.echo("\n✅ All models verified!")

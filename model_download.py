@@ -36,7 +36,7 @@ def hg_download(repo_id: str, local_dir: Path, hf_token: Optional[str] = None) -
 @click.option(
     "--hf_token", type=str, default=None, help="HuggingFace token for private models"
 )
-def download_detection(repo_id: str, local_dir: str, hf_token: Optional[str] = None):
+def download(repo_id: str, local_dir: str, hf_token: Optional[str] = None):
     """Download detection model from HuggingFace."""
     local_path = Path(local_dir)
     local_path.mkdir(parents=True, exist_ok=True)
@@ -45,4 +45,4 @@ def download_detection(repo_id: str, local_dir: str, hf_token: Optional[str] = N
 
 
 if __name__ == "__main__":
-    download_detection()
+    download()
