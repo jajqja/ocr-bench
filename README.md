@@ -20,7 +20,7 @@ A comprehensive benchmarking suite for evaluating OCR models (Text Detection & T
 - Download models from HuggingFace Hub
 - Support for private models with HF token
 
-✅ **Comprehensive Reporting**
+**Comprehensive Reporting**
 - JSON results with detailed metrics
 - Sample predictions visualization
 - Benchmark comparison reports
