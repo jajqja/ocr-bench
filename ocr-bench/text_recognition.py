@@ -14,8 +14,163 @@ from surya.foundation import FoundationPredictor
 from tabulate import tabulate
 import datasets
 from pdf2image import convert_from_bytes
+import io
+import h5py
+import requests
 
 from utils.metrics import calculate_recognition_metrics
+
+
+def download_h5_file(url: str, output_path: str) -> str:
+    """Download H5 file from URL with progress bar.
+
+    Args:
+        url: URL to download from
+        output_path: Path to save file
+
+    Returns:
+        Path to downloaded file
+    """
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    if os.path.exists(output_path):
+        print(f"File already exists: {output_path}")
+        return output_path
+
+    print(f"Downloading {url}...")
+    response = requests.get(url, stream=True)
+    response.raise_for_status()
+
+    total_size = int(response.headers.get("content-length", 0))
+    downloaded = 0
+
+    with open(output_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total_size:
+                    pct = (downloaded / total_size) * 100
+                    print(f"  Downloaded {downloaded}/{total_size} bytes ({pct:.1f}%)")
+
+    return output_path
+
+
+def load_h5_recognition_data(
+    h5_path: str, max_rows: int = 100
+) -> Tuple[List, List, List]:
+    """Load recognition data from a single H5 file.
+
+    Args:
+        h5_path: Path to H5 file
+        max_rows: Maximum number of samples to load
+
+    Returns:
+        Tuple of (images, texts, bboxes)
+    """
+    images = []
+    texts = []
+    bboxes = []
+    sample_count = 0
+
+    with h5py.File(h5_path, "r") as f:
+        num_samples = len(f["images"])
+
+        for idx in range(num_samples):
+            if sample_count >= max_rows:
+                break
+
+            try:
+                # Load image from bytes
+                img_bytes = f["images"][idx]
+                image = Image.open(io.BytesIO(bytes(img_bytes))).convert("RGB")
+                images.append(image)
+
+                # Parse annotation JSON
+                annotation_str = f["annotations"][idx]
+                if isinstance(annotation_str, bytes):
+                    annotation_str = annotation_str.decode("utf-8")
+                annotation = json.loads(annotation_str)
+
+                # Extract line_bboxes and text
+                line_bboxes = []
+                for line in annotation.get("line_bboxes", []):
+                    text = line.get("text", "")
+                    bbox = line.get("bbox", [])
+                    if text.strip() and bbox:
+                        texts.append(text)
+                        # bbox format: [x, y, w, h] -> convert to [x1, y1, x2, y2]
+                        x, y, w, h = bbox
+                        line_bboxes.append([x, y, x + w, y + h])
+
+                bboxes.append(line_bboxes)
+                sample_count += 1
+
+            except Exception as e:
+                print(f"Warning: Error processing sample {idx}: {e}")
+                continue
+
+    return images, texts, bboxes
+
+
+def load_nvidia_ocr_multilingual_dataset(
+    h5_files: List[str], max_rows: int = 100, language: str = "en"
+) -> Tuple[List, List, List]:
+    """Load NVIDIA OCR Synthetic Multilingual dataset from H5 files.
+
+    Args:
+        h5_files: List of H5 filenames to download (e.g., ["train_000", "train_001"])
+                  Files will be downloaded from HuggingFace Hub
+        max_rows: Maximum total number of samples to load
+        language: Language to load (en, ja, ko, ru, zh_hans, zh_hant)
+
+    Returns:
+        Tuple of (images, texts, bboxes) where:
+        - images: List of PIL images
+        - texts: Flattened list of text lines
+        - bboxes: List of line_bboxes per image
+    """
+    base_url = f"https://huggingface.co/datasets/nvidia/OCR-Synthetic-Multilingual-v1/resolve/main/{language}/train"
+    cache_dir = os.path.expanduser("~/.cache/nvidia_ocr_multilingual")
+
+    images = []
+    texts = []
+    bboxes = []
+    sample_count = 0
+
+    for h5_file in h5_files:
+        if sample_count >= max_rows:
+            break
+
+        # Ensure filename ends with .h5
+        if not h5_file.endswith(".h5"):
+            h5_file = f"{h5_file}.h5"
+
+        # Download file
+        url = f"{base_url}/{h5_file}?download=true"
+        local_path = os.path.join(cache_dir, language, h5_file)
+
+        try:
+            local_path = download_h5_file(url, local_path)
+            print(f"Loading data from {h5_file}...")
+
+            # Load from H5 file
+            remaining = max_rows - sample_count
+            img_batch, text_batch, bbox_batch = load_h5_recognition_data(
+                local_path, remaining
+            )
+
+            images.extend(img_batch)
+            texts.extend(text_batch)
+            bboxes.extend(bbox_batch)
+            sample_count += len(img_batch)
+
+        except Exception as e:
+            print(f"Error processing {h5_file}: {e}")
+            continue
+
+    print(f"Loaded {len(images)} total images and {len(texts)} text lines")
+    return images, texts, bboxes
 
 
 def extract_text_from_pdf(
@@ -305,6 +460,18 @@ def batch_recognize(
 )
 @click.option("--batch_size", type=int, help="Batch size for inference.", default=8)
 @click.option("--model_path", type=str, required=True, help="Path to recognition model")
+@click.option(
+    "--language",
+    type=str,
+    help="Language for NVIDIA dataset (en, ja, ko, ru, zh_hans, zh_hant).",
+    default="en",
+)
+@click.option(
+    "--h5_files",
+    type=str,
+    help="Comma-separated H5 file names to load (e.g., 'train_000,train_001,train_002'). For NVIDIA dataset only.",
+    default="train_000",
+)
 def main(
     pdf_path: Optional[str],
     dataset_name: Optional[str],
@@ -315,6 +482,8 @@ def main(
     max_rows: int,
     batch_size: int,
     model_path: str,
+    language: str,
+    h5_files: str,
 ):
     """Benchmark text recognition model."""
 
@@ -341,6 +510,17 @@ def main(
 
         images, ground_truth_texts, bboxes = load_pdfa_recognition_dataset(
             dataset_name, max_rows
+        )
+    elif (
+        dataset_name is not None
+        and dataset_name == "nvidia/OCR-Synthetic-Multilingual-v1"
+    ):
+        print(f"Loading dataset: {dataset_name}")
+        pathname = f"nvidia_ocr_{language}"
+
+        h5_file_list = [f.strip() for f in h5_files.split(",")]
+        images, ground_truth_texts, bboxes = load_nvidia_ocr_multilingual_dataset(
+            h5_file_list, max_rows, language
         )
     elif data_dir is not None:
         print(f"Loading local dataset: {data_dir}")
