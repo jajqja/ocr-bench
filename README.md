@@ -1,4 +1,4 @@
-# Surya OCR Benchmark Suite
+# Fintuned Surya OCR Benchmark Suite
 
 A comprehensive benchmarking suite for evaluating OCR models (Text Detection & Text Recognition) on PDF and Hugging Face datasets.
 
