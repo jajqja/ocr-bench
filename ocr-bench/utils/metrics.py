@@ -345,7 +345,9 @@ def clean_text(text: str) -> str:
     return text
 
 
-def calculate_recognition_metrics(references: list, hypotheses: list, show_progress: bool = False) -> dict:
+def calculate_recognition_metrics(
+    references: list, hypotheses: list, show_progress: bool = False
+) -> dict:
     """Calculate all recognition metrics at once.
 
     Args:
@@ -367,12 +369,22 @@ def calculate_recognition_metrics(references: list, hypotheses: list, show_progr
     # Calculate scores with optional progress bar
     desc = "Calculating metrics" if show_progress else None
     cer_scores = [
-        character_error_rate(r, h) 
-        for r, h in tqdm(zip(cleaned_refs, cleaned_hyps), total=len(references), desc=desc, disable=not show_progress)
+        character_error_rate(r, h)
+        for r, h in tqdm(
+            zip(cleaned_refs, cleaned_hyps),
+            total=len(references),
+            desc=desc,
+            disable=not show_progress,
+        )
     ]
     wer_scores = [
-        word_error_rate(r, h) 
-        for r, h in tqdm(zip(cleaned_refs, cleaned_hyps), total=len(references), desc=desc, disable=not show_progress)
+        word_error_rate(r, h)
+        for r, h in tqdm(
+            zip(cleaned_refs, cleaned_hyps),
+            total=len(references),
+            desc=desc,
+            disable=not show_progress,
+        )
     ]
 
     return {
