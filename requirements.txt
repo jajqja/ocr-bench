@@ -6,5 +6,8 @@ datasets
 Pillow
 numpy
 pymupdf
+pdf2image
 ruff
 black
+h5py
+requests

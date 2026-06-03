@@ -4,6 +4,8 @@ from typing import List
 
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
+import re
+from tqdm import tqdm
 
 
 def box_area(box):
@@ -321,12 +323,37 @@ def recognition_accuracy(references: list, hypotheses: list) -> float:
     return correct / len(references)
 
 
-def calculate_recognition_metrics(references: list, hypotheses: list) -> dict:
+def clean_text(text: str) -> str:
+    """Clean and normalize text for OCR evaluation (CER/WER).
+
+    - Converts to lowercase
+    - Removes leading/trailing whitespaces
+    - Collapses multiple whitespaces into a single space
+    """
+    if not text:
+        return ""
+
+    # 1. Ép về chuỗi viết thường
+    text = text.lower()
+
+    # 2. Thay thế các ký tự xuống dòng, tab... thành khoảng trắng đơn
+    text = re.sub(r"\s+", " ", text)
+
+    # 3. Cắt khoảng trắng thừa ở 2 đầu
+    text = text.strip()
+
+    return text
+
+
+def calculate_recognition_metrics(
+    references: list, hypotheses: list, show_progress: bool = False
+) -> dict:
     """Calculate all recognition metrics at once.
 
     Args:
         references: List of ground truth texts
         hypotheses: List of predicted texts
+        show_progress: Whether to show a progress bar
 
     Returns:
         Dictionary with cer, wer, and accuracy
@@ -336,10 +363,29 @@ def calculate_recognition_metrics(references: list, hypotheses: list) -> dict:
             f"Length mismatch: {len(references)} references vs {len(hypotheses)} hypotheses"
         )
 
+    cleaned_refs = [clean_text(ref) for ref in references]
+    cleaned_hyps = [clean_text(hyp) for hyp in hypotheses]
+
+    # Calculate scores with optional progress bar
+    desc = "Calculating metrics" if show_progress else None
     cer_scores = [
-        character_error_rate(ref, hyp) for ref, hyp in zip(references, hypotheses)
+        character_error_rate(r, h)
+        for r, h in tqdm(
+            zip(cleaned_refs, cleaned_hyps),
+            total=len(references),
+            desc=desc,
+            disable=not show_progress,
+        )
     ]
-    wer_scores = [word_error_rate(ref, hyp) for ref, hyp in zip(references, hypotheses)]
+    wer_scores = [
+        word_error_rate(r, h)
+        for r, h in tqdm(
+            zip(cleaned_refs, cleaned_hyps),
+            total=len(references),
+            desc=desc,
+            disable=not show_progress,
+        )
+    ]
 
     return {
         "cer": np.mean(cer_scores) if cer_scores else 0.0,
