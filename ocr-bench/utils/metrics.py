@@ -5,6 +5,7 @@ from typing import List
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 import re
+from tqdm import tqdm
 
 
 def box_area(box):
@@ -344,12 +345,13 @@ def clean_text(text: str) -> str:
     return text
 
 
-def calculate_recognition_metrics(references: list, hypotheses: list) -> dict:
+def calculate_recognition_metrics(references: list, hypotheses: list, show_progress: bool = False) -> dict:
     """Calculate all recognition metrics at once.
 
     Args:
         references: List of ground truth texts
         hypotheses: List of predicted texts
+        show_progress: Whether to show a progress bar
 
     Returns:
         Dictionary with cer, wer, and accuracy
@@ -362,11 +364,16 @@ def calculate_recognition_metrics(references: list, hypotheses: list) -> dict:
     cleaned_refs = [clean_text(ref) for ref in references]
     cleaned_hyps = [clean_text(hyp) for hyp in hypotheses]
 
-    # Tính toán các scores song song
+    # Calculate scores with optional progress bar
+    desc = "Calculating metrics" if show_progress else None
     cer_scores = [
-        character_error_rate(r, h) for r, h in zip(cleaned_refs, cleaned_hyps)
+        character_error_rate(r, h) 
+        for r, h in tqdm(zip(cleaned_refs, cleaned_hyps), total=len(references), desc=desc, disable=not show_progress)
     ]
-    wer_scores = [word_error_rate(r, h) for r, h in zip(cleaned_refs, cleaned_hyps)]
+    wer_scores = [
+        word_error_rate(r, h) 
+        for r, h in tqdm(zip(cleaned_refs, cleaned_hyps), total=len(references), desc=desc, disable=not show_progress)
+    ]
 
     return {
         "cer": np.mean(cer_scores) if cer_scores else 0.0,

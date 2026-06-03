@@ -548,7 +548,7 @@ def main(
 
     # Calculate metrics
     print("Calculating metrics...")
-    metrics = calculate_recognition_metrics(ground_truth_texts, predictions)
+    metrics = calculate_recognition_metrics(ground_truth_texts, predictions, show_progress=True)
 
     # Save results
     os.makedirs(results_dir, exist_ok=True)
