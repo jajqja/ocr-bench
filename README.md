@@ -1,21 +1,21 @@
 # Surya OCR Benchmark Suite
 
-A comprehensive benchmarking suite for evaluating OCR models (Text Detection & Text Recognition) on PDF datasets.
+A comprehensive benchmarking suite for evaluating OCR models (Text Detection & Text Recognition) on PDF and Hugging Face datasets.
 
 ## Features
 
-✅ **Text Detection Evaluation**
+**Text Detection Evaluation**
 - Precision & Recall metrics
 - IOU (Intersection over Union) score
 - Works with PDF files or HuggingFace datasets
 
-✅ **Text Recognition Evaluation**
+**Text Recognition Evaluation**
 - Word Error Rate (WER)
 - Character Error Rate (CER)  
 - Exact Match Accuracy
 - Works with PDF files or HuggingFace datasets
 
-✅ **Model Management**
+**Model Management**
 - Load models from local storage
 - Download models from HuggingFace Hub
 - Support for private models with HF token
@@ -54,13 +54,13 @@ You can edit scripts from `model_download.py`
 
 ```bash
 # Download detection model
-python -m ocr-bench/model_download \
+python ocr-bench/model_download.py \
   --repo_id username/detection-model \
   --local_dir model_path/textdetection \
   --hf_token hf_*************
 
 # Download recognition model
-python -m ocr-bench/model_download \
+python ocr-bench/model_download.py \
   --repo_id username/recognition-model \
   --local_dir model_path/textrecognition \
   --hf_token hf_*************
@@ -82,7 +82,7 @@ python ocr-bench/benchmark.py benchmark-pdf \
 ### 3. Run Individual Benchmarks
 #### 3.1 Digital pdf file
 ```bash
-python -m ocr-bench/text_detection \
+python ocr-bench/text_detection.py \
   --pdf_path /path/to/document.pdf \
   --model_path /path/to/detection/model \
   --max_rows 100 \
@@ -91,7 +91,7 @@ python -m ocr-bench/text_detection \
 ```
 
 ```bash
-python -m ocr-bench/text_recognition \
+python ocr-bench/text_recognition.py \
   --pdf_path /path/to/document.pdf \
   --model_path /path/to/recognition/model \
   --max_rows 100 \
@@ -100,7 +100,7 @@ python -m ocr-bench/text_recognition \
 
 #### 3.2 Data line folder (for recognition only)
 ```bash
-python -m ocr-bench/text_recognition \
+python ocr-bench/text_recognition.py \
   --data_dir /datadir \
   --image_folder images \
   --label_file labels.txt \
@@ -113,12 +113,12 @@ python -m ocr-bench/text_recognition \
 
 ```bash
 # Benchmark on HuggingFace dataset (PDFA)
-python -m ocr-bench/text_detection \
+python ocr-bench/text_detection.py \
   --dataset_name pixparse/pdfa-eng-wds \
   --model_path ./detection_model \
   --max_rows 100
 
-python -m ocr-bench/text_recognition \
+python ocr-bench/text_recognition.py \
   --dataset_name pixparse/pdfa-eng-wds \
   --model_path ./recognition_model \
   --max_rows 100
@@ -130,6 +130,35 @@ python ocr-bench/benchmark.py benchmark-dataset \
   --recognition_model /path/to/recognition/model \
   --max_samples 100 \
   --results_dir ./results
+```
+
+```bash
+# Benchmark on HuggingFace dataset (nvidia/OCR-Synthetic-Multilingual-v1)
+python ocr-bench/text_detection.py \
+  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
+  --model_path ./model_path/text_detection \
+  --language en \
+  --h5_files train_000 \
+  --max_rows 1000 \
+  --batch_size 32
+
+python ocr-bench/text_recognition.py \
+  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
+  --model_path ./model_path/text_recognition \
+  --language en \
+  --h5_files train_000 \
+  --max_rows 10 \
+  --batch_size 128
+
+# Full benchmark on dataset
+python ocr-bench/benchmark.py benchmark-dataset \
+  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
+  --detection_model /path/to/detection/model \
+  --recognition_model /path/to/recognition/model \
+  --max_samples 1000 \
+  --results_dir ./results
+  --language en \
+  --h5_files train_000
 ```
 
 #### 3.4 Supported Datasets
