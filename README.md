@@ -167,8 +167,9 @@ python ocr-bench/benchmark.py benchmark-dataset \
 |-------------|------|----------|
 | `vikp/doclaynet_bench` | HuggingFace | Document layout with bounding boxes |
 | `pixparse/pdfa-eng-wds` | HuggingFace | English PDFs with word/line-level OCR annotations |
+| `nvidia/OCR-Synthetic-Multilingual-v1` | HuggingFace | Large-scale synthetically generated OCR training dataset for multilingual text detection and recognition |
 
-Both datasets support detection and recognition benchmarks.
+All datasets support detection and recognition benchmarks.
 
 ### 4. Compare Results
 
@@ -250,7 +251,7 @@ results/
 ### Debug Mode with Visualizations
 
 ```bash
-python -m text_detection \
+python text_detection.py \
   --pdf_path document.pdf \
   --model_path ./model \
   --debug  # Saves detection bbox images
@@ -262,7 +263,7 @@ python -m text_detection \
 
 ```
 ocr-bench/
-├── ocr-bench/          # Model download utilities & CLI
+├── ocr-bench/                     # Model download utilities & CLI
 │   ├── model_download.py          # Model download utilities & CLI
 │   ├── text_detection.py          # Detection benchmark script
 │   ├── text_recognition.py        # Recognition benchmark script
@@ -270,8 +271,8 @@ ocr-bench/
 │   ├── utils/
 │   │   ├── metrics.py             # Metric calculations (IOU, CER, WER, etc.)
 │   │   ├── bbox.py                # Bounding box utilities
-├── requirements.txt           # Python dependencies
-└── README.md                  # This file
+├── requirements.txt               # Python dependencies
+└── README.md                      # This file
 ```
 
 ---
@@ -301,13 +302,13 @@ python ocr-bench/benchmark.py verify-models --help
 python ocr-bench/benchmark.py compare-results --help
 
 # Model loading help
-python -m ocr-bench/model_download --help
+python ocr-bench/model_download.py --help
 
 # Detection benchmark help
-python -m ocr-bench/text_detection --help
+python ocr-bench/text_detection.py --help
 
 # Recognition benchmark help
-python -m ocr-bench/text_recognition --help
+python ocr-bench/text_recognition.py --help
 ```
 
 ---
@@ -325,7 +326,13 @@ python ocr-bench/benchmark.py verify-models \
 ### Out of memory errors
 Reduce batch size or max_rows:
 ```bash
-python -m ocr-bench/text_recognition \
+python ocr-bench/text_recognition.py \
+  --pdf_path document.pdf \
+  --model_path ./model \
+  --max_rows 10 \
+  --batch_size 2
+
+python ocr-bench/text_detection.py \
   --pdf_path document.pdf \
   --model_path ./model \
   --max_rows 10 \
@@ -348,8 +355,47 @@ python -c "import fitz; doc = fitz.open('document.pdf'); print(f'Pages: {len(doc
 !git clone https://github.com/jajqja/ocr-bench.git
 %cd ocr-bench
 
+# Install requirements
 !pip install -r requirements.txt
 
-# Run benchmark
-!python -m ocr-bench/text_detection --pdf_path sample.pdf --model_path ./model
+# Download detection model
+!python ocr-bench/model_download.py \
+  --repo_id newai-vn/newai-text-det \
+  --local_dir model_path/text_detection \
+  --hf_token hf_****************
+
+# Download recognition model
+!python ocr-bench/model_download.py \
+  --repo_id newai-vn/newai-text-rec \
+  --local_dir model_path/text_recognition \
+  --hf_token hf_***************
+
+# Run text detection
+!python ocr-bench/text_detection.py \
+  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
+  --model_path ./model_path/text_detection \
+  --language en \
+  --h5_files train_000 \
+  --max_rows 1000 \
+  --batch_size 32
+
+# Run text recognition
+!python ocr-bench/text_recognition.py \
+  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
+  --model_path ./model_path/text_recognition \
+  --language en \
+  --h5_files train_000 \
+  --max_rows 1000 \
+  --batch_size 128
+
+# Or run full benchmark
+# Full benchmark on dataset
+!python ocr-bench/benchmark.py benchmark-dataset \
+  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
+  --detection_model ./model_path/text_recognition \
+  --recognition_model ./model_path/text_recognition \
+  --max_samples 1000 \
+  --results_dir ./results \
+  --language en \
+  --h5_files train_000
 ```
