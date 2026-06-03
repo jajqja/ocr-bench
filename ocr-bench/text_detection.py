@@ -1,7 +1,7 @@
 import collections
 import copy
 import json
-from typing import Optional
+from typing import Optional, Tuple, List
 
 import click
 
@@ -17,6 +17,73 @@ import os
 import time
 from tabulate import tabulate
 import datasets
+from pdf2image import convert_from_bytes
+
+
+def load_pdfa_detection_dataset(
+    dataset_name: str, max_rows: int = 100
+) -> Tuple[List, List]:
+    """Load PDFA dataset for detection benchmark.
+
+    Args:
+        dataset_name: Name of the PDFA dataset (pixparse/pdfa-eng-wds)
+        max_rows: Maximum number of documents to load
+
+    Returns:
+        Tuple of (images, bboxes) where:
+        - images: List of PIL images from PDF pages
+        - bboxes: List of lists of bboxes per page
+    """
+    dataset = datasets.load_dataset(dataset_name, split="train", streaming=False)
+
+    images = []
+    bboxes = []
+
+    for idx, sample in enumerate(dataset):
+        if idx >= max_rows:
+            break
+
+        try:
+            # Extract PDF and render to images
+            pdf_bytes = sample["pdf"]
+            pdf_pages = convert_from_bytes(pdf_bytes, dpi=300)
+            pdf_pages = convert_if_not_rgb(pdf_pages)
+
+            # Extract metadata from JSON
+            metadata = (
+                json.loads(sample["ocr"])
+                if isinstance(sample["ocr"], str)
+                else sample["ocr"]
+            )
+
+            # Process each page
+            for page_idx, page_data in enumerate(metadata.get("pages", [])):
+                if page_idx >= len(pdf_pages):
+                    break
+
+                img = pdf_pages[page_idx]
+                images.append(img)
+
+                # Extract bounding boxes from words (using normalized coords)
+                page_bboxes = []
+                for word_item in page_data.get("words", []):
+                    word_bboxes = word_item.get("bbox", [])
+                    for bbox in word_bboxes:
+                        # bbox format: [left, top, width, height] (normalized 0-1)
+                        # Convert to pixel coordinates
+                        x1 = int(bbox[0] * img.width)
+                        y1 = int(bbox[1] * img.height)
+                        x2 = int((bbox[0] + bbox[2]) * img.width)
+                        y2 = int((bbox[1] + bbox[3]) * img.height)
+                        page_bboxes.append([x1, y1, x2, y2])
+
+                bboxes.append(page_bboxes)
+
+        except Exception as e:
+            print(f"Warning: Error processing sample {idx}: {e}")
+            continue
+
+    return images, bboxes
 
 
 @click.command(help="Benchmark detection model on PDF dataset.")
@@ -75,6 +142,10 @@ def main(
             correct_boxes.append(
                 [rescale_bbox(b, (1000, 1000), img_size) for b in boxes]
             )
+    elif dataset_name is not None and dataset_name == "pixparse/pdfa-eng-wds":
+        print(f"Loading dataset: {dataset_name}")
+        pathname = dataset_name.replace("/", "_")
+        images, correct_boxes = load_pdfa_detection_dataset(dataset_name, max_rows)
     else:
         raise ValueError("Either pdf_path or dataset_name must be provided")
 

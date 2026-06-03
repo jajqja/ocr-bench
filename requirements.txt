@@ -6,5 +6,6 @@ datasets
 Pillow
 numpy
 pymupdf
+pdf2image
 ruff
 black

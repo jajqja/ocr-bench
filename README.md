@@ -112,17 +112,34 @@ python -m ocr-bench/text_recognition \
 #### 3.3 Using with HuggingFace Datasets
 
 ```bash
-# Benchmark on HuggingFace dataset
+# Benchmark on HuggingFace dataset (PDFA)
 python -m ocr-bench/text_detection \
-  --dataset_name mnist-ocr-digits \
+  --dataset_name pixparse/pdfa-eng-wds \
   --model_path ./detection_model \
-  --max_rows 1000
+  --max_rows 100
 
 python -m ocr-bench/text_recognition \
-  --dataset_name ocr-text-recognition \
+  --dataset_name pixparse/pdfa-eng-wds \
   --model_path ./recognition_model \
-  --max_rows 1000
+  --max_rows 100
+
+# Full benchmark on dataset
+python ocr-bench/benchmark.py benchmark-dataset \
+  --dataset_name pixparse/pdfa-eng-wds \
+  --detection_model /path/to/detection/model \
+  --recognition_model /path/to/recognition/model \
+  --max_samples 100 \
+  --results_dir ./results
 ```
+
+#### 3.4 Supported Datasets
+
+| Dataset Name | Type | Features |
+|-------------|------|----------|
+| `vikp/doclaynet_bench` | HuggingFace | Document layout with bounding boxes |
+| `pixparse/pdfa-eng-wds` | HuggingFace | English PDFs with word/line-level OCR annotations |
+
+Both datasets support detection and recognition benchmarks.
 
 ### 4. Compare Results
 

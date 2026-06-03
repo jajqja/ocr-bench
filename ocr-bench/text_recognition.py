@@ -13,6 +13,7 @@ from surya.recognition import RecognitionPredictor
 from surya.foundation import FoundationPredictor
 from tabulate import tabulate
 import datasets
+from pdf2image import convert_from_bytes
 
 from utils.metrics import calculate_recognition_metrics
 
@@ -85,13 +86,89 @@ def load_recognition_dataset(
     dataset = datasets.load_dataset(dataset_name, split=f"train[:{max_rows}]")
     images = list(dataset["image"])
     images = convert_if_not_rgb(images)
-    texts = list(dataset["words"])
+    texts = [box_words for image_words in dataset["words"] for box_words in image_words]
     correct_boxes = []
     for i, boxes in enumerate(dataset["bboxes"]):
         img_size = images[i].size
         # 1000,1000 is bbox size for doclaynet
         correct_boxes.append([rescale_bbox(b, (1000, 1000), img_size) for b in boxes])
     return images, texts, correct_boxes
+
+
+def load_pdfa_recognition_dataset(
+    dataset_name: str, max_rows: int = 100
+) -> Tuple[List, List, List]:
+    """Load PDFA dataset for recognition benchmark.
+
+    Args:
+        dataset_name: Name of the PDFA dataset (pixparse/pdfa-eng-wds)
+        max_rows: Maximum number of documents to load
+
+    Returns:
+        Tuple of (images, texts, bboxes) where:
+        - images: List of PIL images from PDF pages
+        - texts: List of text lines (flattened)
+        - bboxes: List of lists of bboxes per page
+    """
+    dataset = datasets.load_dataset(dataset_name, split="train", streaming=False)
+
+    images = []
+    texts = []
+    bboxes = []
+
+    for idx, sample in enumerate(dataset):
+        if idx >= max_rows:
+            break
+
+        try:
+            # Extract PDF and render to images
+            pdf_bytes = sample["pdf"]
+            pdf_pages = convert_from_bytes(pdf_bytes, dpi=300)
+            pdf_pages = convert_if_not_rgb(pdf_pages)
+
+            # Extract metadata from JSON
+            metadata = (
+                json.loads(sample["ocr"])
+                if isinstance(sample["ocr"], str)
+                else sample["ocr"]
+            )
+
+            # Process each page
+            for page_idx, page_data in enumerate(metadata.get("pages", [])):
+                if page_idx >= len(pdf_pages):
+                    break
+
+                img = pdf_pages[page_idx]
+                images.append(img)
+
+                # Extract text and bounding boxes from words
+                page_texts = []
+                page_bboxes = []
+
+                for word_item in page_data.get("words", []):
+                    word_list = word_item.get("text", [])
+                    word_bboxes = word_item.get("bbox", [])
+
+                    for word_text, bbox in zip(word_list, word_bboxes):
+                        if word_text.strip():
+                            page_texts.append(word_text)
+
+                            # bbox format: [left, top, width, height] (normalized 0-1)
+                            # Convert to pixel coordinates
+                            x1 = int(bbox[0] * img.width)
+                            y1 = int(bbox[1] * img.height)
+                            x2 = int((bbox[0] + bbox[2]) * img.width)
+                            y2 = int((bbox[1] + bbox[3]) * img.height)
+                            page_bboxes.append([x1, y1, x2, y2])
+
+                texts.extend(page_texts)
+                bboxes.append(page_bboxes)
+
+        except Exception as e:
+            print(f"Warning: Error processing sample {idx}: {e}")
+            continue
+
+    return images, texts, bboxes
 
 
 def load_recognition_folder(
@@ -164,7 +241,7 @@ def load_recognition_folder(
 
 def batch_recognize(
     predictor, images: List, bboxes: List[List[List[int]]], batch_size: int = 8
-) -> List[str]:
+) -> List[str]:  # Trả về List[str] phẳng hoàn toàn
     """Recognize text from images in batches.
 
     Args:
@@ -186,7 +263,9 @@ def batch_recognize(
             recognition_batch_size=batch_size,
         )
         for result in batch_results:
+            # Dùng .extend để trải phẳng (flatten) tất cả text_lines của các ảnh vào 1 danh sách duy nhất
             predictions.extend(text_line.text for text_line in result.text_lines)
+
     return predictions
 
 
@@ -251,8 +330,16 @@ def main(
         images, ground_truth_texts, bboxes = extract_text_from_pdf(pdf_path, max_rows)
     elif dataset_name is not None and dataset_name == "vikp/doclaynet_bench":
         print(f"Loading dataset: {dataset_name}")
-        pathname = dataset_name
+        pathname = dataset_name.replace("/", "_")
+
         images, ground_truth_texts, bboxes = load_recognition_dataset(
+            dataset_name, max_rows
+        )
+    elif dataset_name is not None and dataset_name == "pixparse/pdfa-eng-wds":
+        print(f"Loading dataset: {dataset_name}")
+        pathname = dataset_name.replace("/", "_")
+
+        images, ground_truth_texts, bboxes = load_pdfa_recognition_dataset(
             dataset_name, max_rows
         )
     elif data_dir is not None:
@@ -265,10 +352,7 @@ def main(
         raise ValueError("Either pdf_path, dataset_name, or data_dir must be provided")
 
     flat_bboxes = [bbox for image_bboxes in bboxes for bbox in image_bboxes]
-    sample_count = 0
-
-    for image_bboxes in bboxes:
-        sample_count += len(image_bboxes)
+    sample_count = len(ground_truth_texts)
 
     print(f"Loaded {len(images)} images and {sample_count} text lines")
 
