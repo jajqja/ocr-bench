@@ -262,6 +262,12 @@ def load_pdfa_detection_dataset(
     help="Comma-separated H5 file names to load (e.g., 'train_000,train_001,train_002'). For NVIDIA dataset only.",
     default="train_000",
 )
+@click.option(
+    "--batch_size",
+    type=int,
+    help="Batch size for inference (default: 8). Adjust based on GPU memory.",
+    default=8,
+)
 def main(
     pdf_path: Optional[str],
     dataset_name: Optional[str],
@@ -271,6 +277,7 @@ def main(
     model_path: str,
     language: str,
     h5_files: str,
+    batch_size: int,
     hf_token: Optional[str] = None,
 ):
     """Main benchmark function for detection."""
@@ -328,7 +335,7 @@ def main(
     # Run inference
     print("Running inference...")
     start = time.time()
-    predictions = det_predictor(images)
+    predictions = det_predictor(images, batch_size=batch_size)
     inference_time = time.time() - start
 
     folder_name = pathname
