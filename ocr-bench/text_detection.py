@@ -16,6 +16,7 @@ from surya.detection import DetectionPredictor
 import os
 import time
 from tabulate import tabulate
+from tqdm import tqdm
 import datasets
 from pdf2image import convert_from_bytes
 import io
@@ -347,7 +348,9 @@ def main(
     page_metrics = collections.OrderedDict()
     iou_scores = []
 
-    for idx, (sb, cb) in enumerate(zip(predictions, correct_boxes)):
+    for idx, (sb, cb) in enumerate(
+        tqdm(zip(predictions, correct_boxes), total=len(predictions))
+    ):
         surya_boxes = [s.bbox for s in sb.bboxes]
         surya_polys = [s.polygon for s in sb.bboxes]
 

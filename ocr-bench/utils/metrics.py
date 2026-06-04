@@ -327,8 +327,9 @@ def clean_text(text: str) -> str:
     """Clean and normalize text for OCR evaluation (CER/WER).
 
     - Converts to lowercase
-    - Removes leading/trailing whitespaces
+    - Replaces non-alphanumeric characters with space
     - Collapses multiple whitespaces into a single space
+    - Removes leading/trailing whitespaces
     """
     if not text:
         return ""
@@ -336,10 +337,16 @@ def clean_text(text: str) -> str:
     # 1. Ép về chuỗi viết thường
     text = text.lower()
 
-    # 2. Thay thế các ký tự xuống dòng, tab... thành khoảng trắng đơn
+    # 2. Thay các kí tự KHÔNG phải chữ và số thành khoảng trắng
+    # Regex này giữ lại chữ cái (bao gồm tiếng Việt có dấu) và chữ số
+    text = re.sub(r"[^\w\s]", " ", text)
+
+    text = re.sub("_", " ", text)
+
+    # 3. Thay thế các ký tự xuống dòng, tab, nhiều khoảng trắng... thành khoảng trắng đơn
     text = re.sub(r"\s+", " ", text)
 
-    # 3. Cắt khoảng trắng thừa ở 2 đầu
+    # 4. Cắt khoảng trắng thừa ở 2 đầu
     text = text.strip()
 
     return text
