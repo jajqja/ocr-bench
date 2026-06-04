@@ -214,7 +214,10 @@ def benchmark_pdf(
 
 @cli.command()
 @click.option(
-    "--dataset_name", type=str, required=True, help="HuggingFace dataset name"
+    "--dataset_name",
+    type=str,
+    required=True,
+    help="HuggingFace dataset name (e.g., 'vikp/doclaynet_bench' or 'pixparse/pdfa-eng-wds')",
 )
 @click.option(
     "--detection_model",
@@ -275,6 +278,27 @@ def benchmark_dataset(
         )
     except Exception as e:
         click.echo(f"❌ Detection benchmark failed: {e}", err=True)
+        return
+
+    # Run recognition benchmark
+    click.echo("\n📊 Running recognition benchmark...")
+    from text_recognition import main as recognition_benchmark
+
+    try:
+        recognition_benchmark(
+            [
+                "--dataset_name",
+                dataset_name,
+                "--results_dir",
+                os.path.join(results_dir, "recognition"),
+                "--max_rows",
+                str(max_samples),
+                "--model_path",
+                recognition_model,
+            ]
+        )
+    except Exception as e:
+        click.echo(f"❌ Recognition benchmark failed: {e}", err=True)
         return
 
     click.echo("\n✅ Benchmark complete!")
