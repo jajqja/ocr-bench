@@ -62,14 +62,14 @@ def download_h5_file(url: str, output_path: str) -> str:
 
 
 def load_h5_detection_data(
-    h5_path: str, max_rows: int = 100, min_size: Optional[int] = None
+    h5_path: str, max_rows: int = 100, max_size_limit: Optional[int] = None
 ) -> Tuple[List, List]:
     """Load detection data from a single H5 file with memory optimization.
 
     Args:
         h5_path: Path to H5 file
         max_rows: Maximum number of samples to load
-        min_size: Optional minimum size for the smallest dimension (maintains aspect ratio)
+        max_size_limit: Optional maximum size for the largest dimension (maintains aspect ratio)
 
     Returns:
         Tuple of (images, bboxes)
@@ -95,10 +95,10 @@ def load_h5_detection_data(
 
                 # Resize image if requested (to save memory), maintaining aspect ratio
                 scale_factor = 1.0
-                if min_size:
+                if max_size_limit:
                     max_dim = max(original_size)
-                    if max_dim > min_size:
-                        scale_factor = min_size / max_dim
+                    if max_dim > max_size_limit:
+                        scale_factor = max_size_limit / max_dim
                         new_width = int(original_size[0] * scale_factor)
                         new_height = int(original_size[1] * scale_factor)
                         image = image.resize(
@@ -151,7 +151,7 @@ def load_nvidia_ocr_multilingual_dataset(
     h5_files: List[str],
     max_rows: int = 100,
     language: str = "en",
-    min_size: Optional[int] = None,
+    max_size_limit: Optional[int] = None,
 ) -> Tuple[List, List]:
     """Load NVIDIA OCR Synthetic Multilingual dataset from H5 files with memory optimization.
 
@@ -160,7 +160,7 @@ def load_nvidia_ocr_multilingual_dataset(
                   Files will be downloaded from HuggingFace Hub
         max_rows: Maximum total number of samples to load
         language: Language to load (en, ja, ko, ru, zh_hans, zh_hant)
-        min_size: Optional minimum size for the smallest dimension (maintains aspect ratio)
+        max_size_limit: Optional maximum size for the largest dimension (maintains aspect ratio)
 
     Returns:
         Tuple of (images, bboxes) where:
@@ -193,7 +193,7 @@ def load_nvidia_ocr_multilingual_dataset(
             # Load from H5 file
             remaining = max_rows - sample_count
             img_batch, bbox_batch = load_h5_detection_data(
-                local_path, remaining, min_size=min_size
+                local_path, remaining, max_size_limit=max_size_limit
             )
 
             images.extend(img_batch)
@@ -315,9 +315,9 @@ def load_pdfa_detection_dataset(
     default=8,
 )
 @click.option(
-    "--min_size",
+    "--max_size_limit",
     type=int,
-    help="Minimum size for smallest image dimension (maintains aspect ratio, e.g., 1024). Leave empty to keep original size.",
+    help="Maximum size for largest image dimension (maintains aspect ratio, e.g., 1024). Leave empty to keep original size.",
     default=None,
 )
 def main(
@@ -330,15 +330,15 @@ def main(
     language: str,
     h5_files: str,
     batch_size: int,
-    min_size: Optional[int],
+    max_size_limit: Optional[int],
     hf_token: Optional[str] = None,
 ):
     """Main benchmark function for detection."""
     det_predictor = DetectionPredictor(checkpoint=model_path)
 
-    if min_size:
+    if max_size_limit:
         print(
-            f"Images will be resized to maintain aspect ratio with min size = {min_size}px"
+            f"Images will be resized to maintain aspect ratio with max size limit = {max_size_limit} px"
         )
 
     # Load data
@@ -379,7 +379,7 @@ def main(
         pathname = f"nvidia_ocr_{language}"
         h5_file_list = [f.strip() for f in h5_files.split(",")]
         images, correct_boxes = load_nvidia_ocr_multilingual_dataset(
-            h5_file_list, max_rows, language, min_size=min_size
+            h5_file_list, max_rows, language, max_size_limit=max_size_limit
         )
     else:
         raise ValueError("Either pdf_path or dataset_name must be provided")
