@@ -13,10 +13,12 @@ from surya.recognition import RecognitionPredictor
 from surya.foundation import FoundationPredictor
 from tabulate import tabulate
 import datasets
+from tqdm import tqdm
 from pdf2image import convert_from_bytes
 import io
 import h5py
 import requests
+import gc
 
 from utils.metrics import calculate_recognition_metrics
 
@@ -57,13 +59,14 @@ def download_h5_file(url: str, output_path: str) -> str:
 
 
 def load_h5_recognition_data(
-    h5_path: str, max_rows: int = 100
+    h5_path: str, max_rows: int = 100, min_size: Optional[int] = None
 ) -> Tuple[List, List, List]:
-    """Load recognition data from a single H5 file.
+    """Load recognition data from a single H5 file with memory optimization.
 
     Args:
         h5_path: Path to H5 file
         max_rows: Maximum number of samples to load
+        min_size: Optional minimum size for the smallest dimension (maintains aspect ratio)
 
     Returns:
         Tuple of (images, texts, bboxes)
@@ -76,7 +79,9 @@ def load_h5_recognition_data(
     with h5py.File(h5_path, "r") as f:
         num_samples = len(f["images"])
 
-        for idx in range(num_samples):
+        for idx in tqdm(
+            range(num_samples), total=min(num_samples, max_rows), desc="Loading H5 data"
+        ):
             if sample_count >= max_rows:
                 break
 
@@ -84,6 +89,20 @@ def load_h5_recognition_data(
                 # Load image from bytes
                 img_bytes = f["images"][idx]
                 image = Image.open(io.BytesIO(bytes(img_bytes))).convert("RGB")
+                original_size = image.size  # (width, height)
+
+                # Resize image if requested (to save memory), maintaining aspect ratio
+                scale_factor = 1.0
+                if min_size:
+                    max_dim = max(original_size)
+                    if max_dim > min_size:
+                        scale_factor = min_size / max_dim
+                        new_width = int(original_size[0] * scale_factor)
+                        new_height = int(original_size[1] * scale_factor)
+                        image = image.resize(
+                            (new_width, new_height), Image.Resampling.LANCZOS
+                        )
+
                 images.append(image)
 
                 # Parse annotation JSON
@@ -101,10 +120,25 @@ def load_h5_recognition_data(
                         texts.append(text)
                         # bbox format: [x, y, w, h] -> convert to [x1, y1, x2, y2]
                         x, y, w, h = bbox
-                        line_bboxes.append([x, y, x + w, y + h])
+                        # Scale bbox if image was resized
+                        if scale_factor != 1.0:
+                            line_bboxes.append(
+                                [
+                                    x * scale_factor,
+                                    y * scale_factor,
+                                    (x + w) * scale_factor,
+                                    (y + h) * scale_factor,
+                                ]
+                            )
+                        else:
+                            line_bboxes.append([x, y, x + w, y + h])
 
                 bboxes.append(line_bboxes)
                 sample_count += 1
+
+                # Garbage collection every 50 samples to free memory
+                if sample_count % 50 == 0:
+                    gc.collect()
 
             except Exception as e:
                 print(f"Warning: Error processing sample {idx}: {e}")
@@ -114,15 +148,19 @@ def load_h5_recognition_data(
 
 
 def load_nvidia_ocr_multilingual_dataset(
-    h5_files: List[str], max_rows: int = 100, language: str = "en"
+    h5_files: List[str],
+    max_rows: int = 100,
+    language: str = "en",
+    min_size: Optional[int] = None,
 ) -> Tuple[List, List, List]:
-    """Load NVIDIA OCR Synthetic Multilingual dataset from H5 files.
+    """Load NVIDIA OCR Synthetic Multilingual dataset from H5 files with memory optimization.
 
     Args:
         h5_files: List of H5 filenames to download (e.g., ["train_000", "train_001"])
                   Files will be downloaded from HuggingFace Hub
         max_rows: Maximum total number of samples to load
         language: Language to load (en, ja, ko, ru, zh_hans, zh_hant)
+        min_size: Optional minimum size for the smallest dimension (maintains aspect ratio)
 
     Returns:
         Tuple of (images, texts, bboxes) where:
@@ -157,13 +195,17 @@ def load_nvidia_ocr_multilingual_dataset(
             # Load from H5 file
             remaining = max_rows - sample_count
             img_batch, text_batch, bbox_batch = load_h5_recognition_data(
-                local_path, remaining
+                local_path, remaining, min_size=min_size
             )
 
             images.extend(img_batch)
             texts.extend(text_batch)
             bboxes.extend(bbox_batch)
             sample_count += len(img_batch)
+
+            # Clear batch after extending to free memory
+            del img_batch, text_batch, bbox_batch
+            gc.collect()
 
         except Exception as e:
             print(f"Error processing {h5_file}: {e}")
@@ -472,6 +514,12 @@ def batch_recognize(
     help="Comma-separated H5 file names to load (e.g., 'train_000,train_001,train_002'). For NVIDIA dataset only.",
     default="train_000",
 )
+@click.option(
+    "--min_size",
+    type=int,
+    help="Minimum size for smallest image dimension (maintains aspect ratio, e.g., 1024). Leave empty to keep original size.",
+    default=None,
+)
 def main(
     pdf_path: Optional[str],
     dataset_name: Optional[str],
@@ -484,6 +532,7 @@ def main(
     model_path: str,
     language: str,
     h5_files: str,
+    min_size: Optional[int],
 ):
     """Benchmark text recognition model."""
 
@@ -491,6 +540,11 @@ def main(
     print(f"Loading recognition model from {model_path}...")
     foundation_model = FoundationPredictor(checkpoint=model_path)
     rec_predictor = RecognitionPredictor(foundation_model)
+
+    if min_size:
+        print(
+            f"Images will be resized to maintain aspect ratio with min size = {min_size}px"
+        )
 
     # Load data
     if pdf_path is not None:
@@ -520,7 +574,7 @@ def main(
 
         h5_file_list = [f.strip() for f in h5_files.split(",")]
         images, ground_truth_texts, bboxes = load_nvidia_ocr_multilingual_dataset(
-            h5_file_list, max_rows, language
+            h5_file_list, max_rows, language, min_size=min_size
         )
     elif data_dir is not None:
         print(f"Loading local dataset: {data_dir}")

@@ -96,9 +96,9 @@ def load_h5_detection_data(
                 # Resize image if requested (to save memory), maintaining aspect ratio
                 scale_factor = 1.0
                 if min_size:
-                    min_dim = min(original_size)
-                    if min_dim < min_size:
-                        scale_factor = min_size / min_dim
+                    max_dim = max(original_size)
+                    if max_dim > min_size:
+                        scale_factor = min_size / max_dim
                         new_width = int(original_size[0] * scale_factor)
                         new_height = int(original_size[1] * scale_factor)
                         image = image.resize(
