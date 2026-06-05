@@ -66,21 +66,8 @@ python ocr-bench/model_download.py \
   --hf_token hf_*************
 ```
 
-### 2. Run Benchmark on Digital PDF file
-
-```bash
-# Full benchmark (detection + recognition)
-python ocr-bench/benchmark.py benchmark-pdf \
-  --pdf_path /path/to/document.pdf \
-  --detection_model /path/to/detection/model \
-  --recognition_model /path/to/recognition/model \
-  --max_pages 100 \
-  --results_dir ./results
-
-```
-
-### 3. Run Individual Benchmarks
-#### 3.1 Digital pdf file
+### 2. Run Individual Benchmarks
+#### 2.1 Digital pdf file
 ```bash
 python ocr-bench/text_detection.py \
   --pdf_path /path/to/document.pdf \
@@ -98,7 +85,7 @@ python ocr-bench/text_recognition.py \
   --results_dir ./recognition_results
 ```
 
-#### 3.2 Data line folder (for recognition only)
+#### 2.2 Data line folder (for recognition only)
 ```bash
 python ocr-bench/text_recognition.py \
   --data_dir /datadir \
@@ -109,7 +96,7 @@ python ocr-bench/text_recognition.py \
   --results_dir ./recognition_results
 ```
 
-#### 3.3 Using with HuggingFace Datasets
+#### 2.3 Using with HuggingFace Datasets
 
 ```bash
 # Benchmark on HuggingFace dataset (PDFA)
@@ -123,13 +110,6 @@ python ocr-bench/text_recognition.py \
   --model_path ./recognition_model \
   --max_rows 100
 
-# Full benchmark on dataset
-python ocr-bench/benchmark.py benchmark-dataset \
-  --dataset_name pixparse/pdfa-eng-wds \
-  --detection_model /path/to/detection/model \
-  --recognition_model /path/to/recognition/model \
-  --max_samples 100 \
-  --results_dir ./results
 ```
 
 ```bash
@@ -150,18 +130,9 @@ python ocr-bench/text_recognition.py \
   --max_rows 10 \
   --batch_size 128
 
-# Full benchmark on dataset
-python ocr-bench/benchmark.py benchmark-dataset \
-  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
-  --detection_model /path/to/detection/model \
-  --recognition_model /path/to/recognition/model \
-  --max_samples 1000 \
-  --results_dir ./results
-  --language en \
-  --h5_files train_000
 ```
 
-#### 3.4 Supported Datasets
+#### 2.4 Supported Datasets
 
 | Dataset Name | Type | Features |
 |-------------|------|----------|
@@ -171,7 +142,7 @@ python ocr-bench/benchmark.py benchmark-dataset \
 
 All datasets support detection and recognition benchmarks.
 
-### 4. Compare Results
+### 3. Compare Results
 
 ```bash
 python ocr-bench/benchmark.py compare-results --results_dir ./results
@@ -267,7 +238,6 @@ ocr-bench/
 │   ├── model_download.py          # Model download utilities & CLI
 │   ├── text_detection.py          # Detection benchmark script
 │   ├── text_recognition.py        # Recognition benchmark script
-│   ├── benchmark.py               # Main unified benchmark CLI
 │   ├── utils/
 │   │   ├── metrics.py             # Metric calculations (IOU, CER, WER, etc.)
 │   │   ├── bbox.py                # Bounding box utilities
@@ -292,15 +262,6 @@ ocr-bench/
 ## Command-Line Help
 
 ```bash
-# Main benchmark help
-python ocr-bench/benchmark.py --help
-
-# Individual command help
-python ocr-bench/benchmark.py benchmark-pdf --help
-python ocr-bench/benchmark.py benchmark-dataset --help
-python ocr-bench/benchmark.py verify-models --help
-python ocr-bench/benchmark.py compare-results --help
-
 # Model loading help
 python ocr-bench/model_download.py --help
 
@@ -314,14 +275,6 @@ python ocr-bench/text_recognition.py --help
 ---
 
 ## Troubleshooting
-
-### Model not found error
-```bash
-# Verify models can be loaded
-python ocr-bench/benchmark.py verify-models \
-  --detection_model /path/to/model \
-  --recognition_model /path/to/model
-```
 
 ### Out of memory errors
 Reduce batch size or max_rows:
@@ -387,15 +340,4 @@ python -c "import fitz; doc = fitz.open('document.pdf'); print(f'Pages: {len(doc
   --h5_files train_000 \
   --max_rows 1000 \
   --batch_size 128
-
-# Or run full benchmark
-# Full benchmark on dataset
-!python ocr-bench/benchmark.py benchmark-dataset \
-  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
-  --detection_model ./model_path/text_recognition \
-  --recognition_model ./model_path/text_recognition \
-  --max_samples 1000 \
-  --results_dir ./results \
-  --language en \
-  --h5_files train_000
 ```
