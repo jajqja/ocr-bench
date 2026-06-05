@@ -57,7 +57,7 @@ $$\text{Final Area} = \max(0.0, \text{Net Coverage Area} - \text{Overlap Area})$
 Regions overlapping multiple times act as point deductions, tanking the score of redundant or poorly localized boxes.
 
 ### 2.3. Bounding Box Object-Level Precision & Recall
-After computing the area coverage score for every individual box, the system applies a strict threshold filter — **$\text{Threshold} = 0.7$ (or $0.8$)** — to categorize each box as True ($1$) or False ($0$). This threshold guarantees that boxes cropping out vital character descenders, ascenders, or tone marks are rejected.
+After computing the area coverage score for every individual box, the system applies a acceptable threshold filter — **$\text{Threshold} = 0.5$** — to categorize each box as True ($1$) or False ($0$). This threshold guarantees that boxes cropping out vital character descenders, ascenders, or tone marks are rejected.
 
 * **Precision:**
     $$\text{Precision} = \frac{\text{Number of Predicted Bboxes exceeding Threshold (> Threshold)}}{\text{Total Number of Predicted Bboxes}}$$

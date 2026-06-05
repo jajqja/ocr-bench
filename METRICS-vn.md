@@ -57,7 +57,7 @@ $$\text{Final Area (Diện tích sau phạt)} = \max(0.0, \text{Diện tích ph�
 Vùng không gian bị đè càng nhiều, diện tích phạt càng lớn, giúp triệt tiêu điểm số của các hộp dự đoán dư thừa rác.
 
 ### 2.3. Precision & Recall ở cấp độ Hộp (Object-level)
-Sau khi chấm điểm độ phủ diện tích cho từng hộp, hệ thống áp một ngưỡng nghiêm ngặt **$\text{Threshold} = 0.7$ (hoặc $0.8$)** để dán nhãn Đúng ($1$) hoặc Sai ($0$). Ngưỡng này đảm bảo các hộp dự đoán làm mất dấu thanh hoặc cắt cụt chữ sẽ bị loại bỏ.
+Sau khi chấm điểm độ phủ diện tích cho từng hộp, hệ thống áp một ngưỡng chấp nhận được **$\text{Threshold} = 0.5$** để dán nhãn Đúng ($1$) hoặc Sai ($0$). Ngưỡng này đảm bảo các hộp dự đoán làm mất dấu thanh hoặc cắt cụt chữ sẽ bị loại bỏ.
 
 * **Precision (Độ chính xác):**
     $$\text{Precision} = \frac{\text{Số lượng Bbox dự đoán đạt chuẩn độ phủ (> Threshold)}}{\text{Tổng số lượng Bbox mô hình đưa ra}}$$
@@ -74,6 +74,6 @@ Sau khi chấm điểm độ phủ diện tích cho từng hộp, hệ thống �
 
 | Loại trạng thái hình học | Điểm IoU gán | Mức độ nặng | Ý nghĩa thực tế |
 | :--- | :---: | :---: | :--- |
-| **Khớp chuẩn hình học** | Từ $0.7 \rightarrow 1.0$ | Không phạt | Hộp bọc vừa vặn, ôm khít dòng chữ thật. |
+| **Khớp chuẩn hình học** | Từ $0.5 \rightarrow 1.0$ | Không phạt | Hộp bọc vừa vặn, ôm khít dòng chữ thật. |
 | **Dự đoán dư thừa / Nhiễu** (`unassigned_pred`) | **$0.0$** | Nhẹ | Mô hình vẽ bậy ra nền trống. Tầng Recognition cắt ra chuỗi rỗng $\rightarrow$ dễ lọc bỏ. |
 | **Bỏ sót hoàn toàn chữ** (`unassigned_actual`) | **$-1.0$** | Cực nặng | Mô hình làm mất hẳn dòng chữ. Tầng OCR phía sau hoàn toàn mù tịt $\rightarrow$ Phạt sập điểm hệ thống. |

@@ -1,6 +1,5 @@
 from functools import partial
 from itertools import repeat
-from typing import List
 
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
@@ -10,131 +9,154 @@ from shapely.geometry import box as ShapelyBox
 from shapely.ops import unary_union
 
 
-def box_area(box):
-    return (box[2] - box[0]) * (box[3] - box[1])
-
-
-def calculate_iou_metrics(predictions: List[List], ground_truth: List[List]) -> float:
-    """Calculate mean IOU score for detection.
-
-    Args:
-        predictions: List of predicted bounding boxes [[x1,y1,x2,y2], ...]
-        ground_truth: List of ground truth bounding boxes
-
-    Returns:
-        Mean IOU score
+def calculate_iou(preds, gts):
     """
-    if len(predictions) == 0 or len(ground_truth) == 0:
+    Tính IoU tổng hợp trên toàn bộ trang giấy.
+    Công thức: Tổng diện tích giao nhau của (Preds và GTs) / Diện tích hợp nhau của (Preds và GTs)
+
+    Format input:
+    preds: List gồm các bbox dạng [x1, y1, x2, y2]
+    gts: List gồm các bbox dạng [x1, y1, x2, y2]
+    """
+    if len(gts) == 0 and len(preds) == 0:
+        return 1.0
+    if len(gts) == 0 or len(preds) == 0:
         return 0.0
 
-    return penalized_iou_score(predictions, ground_truth)
+    pred_polys = [ShapelyBox(b[0], b[1], b[2], b[3]) for b in preds]
+    gt_polys = [ShapelyBox(b[0], b[1], b[2], b[3]) for b in gts]
+
+    pred_union = unary_union(pred_polys)
+    gt_union = unary_union(gt_polys)
+
+    intersection_poly = pred_union.intersection(gt_union)
+    intersection_area = (
+        intersection_poly.area if not intersection_poly.is_empty else 0.0
+    )
+
+    union_area = pred_union.area + gt_union.area - intersection_area
+
+    if union_area == 0:
+        return 0.0
+
+    return intersection_area / union_area
 
 
-def penalized_iou_score(preds, references):
-    matches = match_boxes(preds, references)
-    iou = sum([match[2] for match in matches]) / len(matches)
-    return iou
+def calculate_word_coverage_by_textline(textline_bboxes, word_bboxes):
+    """
+    Tính tỷ lệ bao phủ của các textline bboxes lên toàn bộ các word bboxes trên trang.
+    Công thức: Tổng diện tích (Words giao với Textlines) / Tổng diện tích các Words
+
+    Format input:
+    textline_bboxes: List các bbox dạng [x1, y1, x2, y2]
+    word_bboxes: List các bbox dạng [x1, y1, x2, y2]
+    """
+    if len(word_bboxes) == 0:
+        return 1.0
+    if len(textline_bboxes) == 0:
+        return 0.0
+
+    word_polys = [ShapelyBox(wb[0], wb[1], wb[2], wb[3]) for wb in word_bboxes]
+
+    word_union = unary_union(word_polys)
+    total_word_area = word_union.area
+
+    if total_word_area == 0:
+        return 0.0
+
+    textline_polys = [ShapelyBox(tb[0], tb[1], tb[2], tb[3]) for tb in textline_bboxes]
+    textline_union = unary_union(textline_polys)
+
+    intersection_poly = word_union.intersection(textline_union)
+    intersection_area = (
+        intersection_poly.area if not intersection_poly.is_empty else 0.0
+    )
+
+    coverage_score = intersection_area / total_word_area
+
+    return coverage_score
 
 
-def match_boxes(preds, references, coverage_threshold=0.7):
-    num_actual = len(references)
-    num_predicted = len(preds)
+def calculate_textline_overlap_noise(textline_bboxes, word_bboxes, word_threshold=0.5):
+    """
+    Tính tỷ lệ các từ đơn bị rơi vào vùng trùng lấn giữa các textline (nguy cơ gây lặp từ/thừa từ).
 
-    if num_actual == 0 or num_predicted == 0:
-        return [(i, None, -1.0) for i in range(num_actual)] + [
-            (None, j, 0.0) for j in range(num_predicted)
-        ]
+    Các bước xử lý:
+    1. Tìm vùng không gian giao nhau (overlap) giữa các cặp textline.
+    2. Xác định những từ đơn có trên 50% diện tích nằm trọn trong vùng giao nhau đó.
+    3. Chia tổng số từ bị ảnh hưởng cho tổng số từ thực tế trên trang.
+    """
+    num_words = len(word_bboxes)
+    if num_words == 0:
+        return 0.0
 
-    # 1. Tính ma trận bao phủ (box1_only=True)
-    # iou_matrix[i, j] nghĩa là: Pred_j bao phủ bao nhiêu % diện tích của GT_i
-    iou_matrix = np.zeros((num_actual, num_predicted))
-    for i, actual in enumerate(references):
-        for j, pred in enumerate(preds):
-            iou_matrix[i, j] = calculate_iou(actual, pred, box1_only=True)
+    num_textlines = len(textline_bboxes)
+    if num_textlines <= 1:
+        return 0.0
 
-    assigned_actual = set()
-    assigned_pred = set()
-    matches = []
+    textline_polys = [ShapelyBox(tb[0], tb[1], tb[2], tb[3]) for tb in textline_bboxes]
+    overlap_regions = []
 
-    # 2. Bước quét thứ nhất: Tìm các cặp khớp tốt nhất vượt ngưỡng (Ví dụ > 0.5)
-    # Không dùng vòng lặp Greedy toàn cục nữa, mà xét điều kiện bao phủ cho từng thực thể
+    for i in range(num_textlines):
+        for j in range(i + 1, num_textlines):
+            inter = textline_polys[i].intersection(textline_polys[j])
+            if not inter.is_empty and inter.area > 0:
+                overlap_regions.append(inter)
 
-    # Đối với mỗi GT_i, tìm xem có Pred_j nào bao phủ nó tốt không
-    for i in range(num_actual):
-        best_j = np.argmax(iou_matrix[i, :])
-        highest_coverage = iou_matrix[i, best_j]
+    if not overlap_regions:
+        return 0.0
 
-        if highest_coverage >= coverage_threshold:
-            if highest_coverage > 0.95:
-                highest_coverage = 1.0
-            matches.append((i, best_j, highest_coverage))
-            assigned_actual.add(i)
-            assigned_pred.add(best_j)
+    total_overlap_zone = unary_union(overlap_regions)
 
-    # Đối với mỗi Pred_j chưa được gán, kiểm tra xem nó có nằm gọn trong GT_i nào không
-    # (Để giải quyết trường hợp 2 Pred nằm trong 1 GT mà bạn nói)
-    for j in range(num_predicted):
-        if j in assigned_pred:
+    noise_word_count = 0
+
+    for wb in word_bboxes:
+        word_poly = ShapelyBox(wb[0], wb[1], wb[2], wb[3])
+        word_area = word_poly.area
+
+        if word_area == 0:
             continue
-        # Tìm GT_i mà Pred_j này bao phủ tốt nhất (hoặc ngược lại)
-        best_i = np.argmax(iou_matrix[:, j])
-        # Nếu Pred_j này đóng góp bao phủ tốt cho một GT_i nào đó
-        if iou_matrix[best_i, j] >= coverage_threshold:
-            matches.append((best_i, j, iou_matrix[best_i, j]))
-            assigned_actual.add(best_i)
-            assigned_pred.add(j)
 
-    # 3. Gom các hộp không được giao và áp mức phạt theo ý bạn
-    unassigned_actual = set(range(num_actual)) - assigned_actual
-    unassigned_pred = set(range(num_predicted)) - assigned_pred
+        word_in_overlap_area = word_poly.intersection(total_overlap_zone).area
 
-    # GT sót: Phạt cực nặng -1.0
-    matches.extend([(i, None, -1.0) for i in unassigned_actual])
-    # Pred dư/nhiễu: Phạt 0.0
-    matches.extend([(None, j, 0.0) for j in unassigned_pred])
+        if (word_in_overlap_area / word_area) >= word_threshold:
+            noise_word_count += 1
 
-    return matches
+    noise_rate = noise_word_count / num_words
+    return noise_rate
 
 
-def calculate_iou(box1, box2, box1_only=False):
-    intersection = intersection_area(box1, box2)  # Area of overlap
-    union = box_area(box1)  # Area of box1
-    if not box1_only:
-        union += box_area(box2) - intersection  # Total area covered by both boxes
+def calculate_absolute_orphan_rate(preds, gts):
+    """
+    Tính tỷ lệ các textline dự đoán hoàn toàn vô nghĩa (nhiễu tuyệt đối).
+    Một textline bị coi là nhiễu tuyệt đối nếu diện tích giao của nó với TOÀN BỘ Ground Truth bằng 0.
 
-    if union == 0:
-        return 0
-    return intersection / union
+    Công thức: Số lượng textline dự đoán không chạm bất kỳ GT nào / Tổng số lượng tất cả các textline dự đoán
 
+    Format input:
+    preds: List các bbox dự đoán dạng [x1, y1, x2, y2]
+    gts: List các bbox nhãn gốc dạng [x1, y1, x2, y2]
+    """
+    num_preds = len(preds)
 
-def intersection_area(box1, box2):
-    x_left = max(box1[0], box2[0])
-    y_top = max(box1[1], box2[1])
-    x_right = min(box1[2], box2[2])
-    y_bottom = min(box1[3], box2[3])
-
-    if x_right < x_left or y_bottom < y_top:
+    if num_preds == 0:
         return 0.0
+    if len(gts) == 0:
+        return 1.0
 
-    return (x_right - x_left) * (y_bottom - y_top)
+    gt_polys = [ShapelyBox(b[0], b[1], b[2], b[3]) for b in gts]
+    gt_union = unary_union(gt_polys)
 
+    absolute_orphan_count = 0
 
-def intersection_pixels(box1, box2):
-    x_left = max(box1[0], box2[0])
-    y_top = max(box1[1], box2[1])
-    x_right = min(box1[2], box2[2])
-    y_bottom = min(box1[3], box2[3])
+    for pred_box in preds:
+        pred_poly = ShapelyBox(pred_box[0], pred_box[1], pred_box[2], pred_box[3])
 
-    if x_right < x_left or y_bottom < y_top:
-        return set()
+        if pred_poly.disjoint(gt_union) or pred_poly.intersection(gt_union).area == 0:
+            absolute_orphan_count += 1
 
-    x_left, x_right = int(x_left), int(x_right)
-    y_top, y_bottom = int(y_top), int(y_bottom)
-
-    coords = np.meshgrid(np.arange(x_left, x_right), np.arange(y_top, y_bottom))
-    pixels = set(zip(coords[0].flat, coords[1].flat))
-
-    return pixels
+    orphan_rate = absolute_orphan_count / num_preds
+    return orphan_rate
 
 
 def calculate_coverage(box, other_boxes, penalize_double=True):
@@ -143,7 +165,6 @@ def calculate_coverage(box, other_boxes, penalize_double=True):
     if main_poly.area == 0 or len(other_boxes) == 0:
         return 0.0
 
-    # Lấy danh sách các vùng giao nhau thực tế với hộp gốc
     intersections = []
     for ob in other_boxes:
         other_poly = ShapelyBox(ob[0], ob[1], ob[2], ob[3])
@@ -154,24 +175,21 @@ def calculate_coverage(box, other_boxes, penalize_double=True):
     if not intersections:
         return 0.0
 
-    # Diện tích phủ phẳng thực tế (Vùng chồng lấn chỉ tính 1 lần duy nhất)
     net_coverage_area = unary_union(intersections).area
 
     if not penalize_double:
-        # Nếu KHÔNG phạt trùng lắp: Trả về tỷ lệ phủ phẳng thuần túy
         return net_coverage_area / main_poly.area
     else:
-        # Nếu CÓ phạt trùng lắp:
-        # Lấy tổng diện tích giao thô (có tính trùng) trừ đi diện tích phủ phẳng
         gross_intersection_area = sum(inter.area for inter in intersections)
         overlap_area = gross_intersection_area - net_coverage_area
 
-        # Phạt bằng cách lấy diện tích phủ phẳng trừ đi diện tích bị tính trùng
         final_area = max(0.0, net_coverage_area - overlap_area)
         return final_area / main_poly.area
 
 
-def precision_recall_f1(preds, references, threshold=0.7, workers=8, penalize_double=True):
+def precision_recall_f1_coverage(
+    preds, references, threshold=0.5, workers=8, penalize_double=True
+):
     """Tính Precision và Recall dựa trên diện tích bao phủ."""
     if len(references) == 0:
         return {"precision": 1.0, "recall": 1.0, "f1": 1.0}
@@ -187,7 +205,6 @@ def precision_recall_f1(preds, references, threshold=0.7, workers=8, penalize_do
         precision_iou = executor.map(precision_func, preds, repeat(references))
         reference_iou = executor.map(precision_func, references, repeat(preds))
 
-    # Áp ngưỡng threshold (Bạn nên để 0.7 hoặc 0.8 cho bài toán textline như đã thảo luận)
     precision_classes = [1 if i > threshold else 0 for i in precision_iou]
     precision = sum(precision_classes) / len(precision_classes)
 
@@ -197,45 +214,12 @@ def precision_recall_f1(preds, references, threshold=0.7, workers=8, penalize_do
     return {
         "precision": precision,
         "recall": recall,
-        "f1": 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0,
+        "f1": (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall) > 0
+            else 0.0
+        ),
     }
-
-
-def mean_coverage(preds, references):
-    coverages = []
-
-    for box1 in references:
-        coverage = calculate_coverage(box1, preds)
-        coverages.append(coverage)
-
-    for box2 in preds:
-        coverage = calculate_coverage(box2, references)
-        coverages.append(coverage)
-
-    # Calculate the average coverage over all comparisons
-    if len(coverages) == 0:
-        return 0
-    coverage = sum(coverages) / len(coverages)
-    return {"coverage": coverage}
-
-
-def rank_accuracy(preds, references):
-    # Preds and references need to be aligned so each position refers to the same bbox
-    pairs = []
-    for i, pred in enumerate(preds):
-        for j, pred2 in enumerate(preds):
-            if i == j:
-                continue
-            pairs.append((i, j, pred > pred2))
-
-    # Find how many of the prediction rankings are correct
-    correct = 0
-    for i, ref in enumerate(references):
-        for j, ref2 in enumerate(references):
-            if (i, j, ref > ref2) in pairs:
-                correct += 1
-
-    return correct / len(pairs)
 
 
 # ==================== RECOGNITION METRICS ====================
