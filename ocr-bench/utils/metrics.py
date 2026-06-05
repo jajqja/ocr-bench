@@ -36,7 +36,7 @@ def penalized_iou_score(preds, references):
     return iou
 
 
-def match_boxes(preds, references, coverage_threshold=0.5):
+def match_boxes(preds, references, coverage_threshold=0.7):
     num_actual = len(references)
     num_predicted = len(preds)
 
