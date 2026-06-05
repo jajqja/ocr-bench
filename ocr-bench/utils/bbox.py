@@ -1,6 +1,8 @@
 import pymupdf
 from surya.common.util import rescale_bbox
 
+from PIL import ImageDraw
+
 
 def get_pdf_lines(pdf_path, img_sizes):
     doc = pymupdf.open(pdf_path)
@@ -66,3 +68,15 @@ def join_lines(bboxes, max_gap=5):
 
         merged.append(box)
     return merged
+
+
+def draw_bboxes_on_image(image, bboxes, color="red", width=2):
+    if bboxes is None or len(bboxes) == 0:
+        return image
+
+    draw = ImageDraw.Draw(image)
+    for box in bboxes:
+        x1, y1, x2, y2 = map(int, box)
+        draw.rectangle([x1, y1, x2, y2], outline=color, width=width)
+
+    return image
