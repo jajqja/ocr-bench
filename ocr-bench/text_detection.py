@@ -6,7 +6,7 @@ from typing import Optional, Tuple, List
 import click
 
 from utils.bbox import get_pdf_lines
-from utils.metrics import precision_recall, calculate_iou_metrics
+from utils.metrics import precision_recall_f1, calculate_iou_metrics
 from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
 from surya.debug.draw import draw_polys_on_image
 from surya.common.util import rescale_bbox
@@ -412,7 +412,7 @@ def main(
         surya_polys = [s.polygon for s in sb.bboxes]
 
         # Calculate precision and recall
-        raw_metrics = precision_recall(surya_boxes, cb)
+        raw_metrics = precision_recall_f1(surya_boxes, cb)
         surya_metrics = {k: float(v) for k, v in raw_metrics.items()}
 
         # Calculate IOU score
@@ -469,6 +469,7 @@ def main(
 
     print("\nMetric Descriptions:")
     print("  - Precision/Recall: Coverage threshold at 0.5")
+    print("  - F1 Score: Harmonic mean of Precision and Recall")
     print("  - IOU: Intersection over Union (penalized for multiple overlapping boxes)")
     print(
         f"  - Inference Time: {inference_time:.2f}s total, {inference_time/len(images):.4f}s per sample"

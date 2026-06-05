@@ -11,3 +11,4 @@ ruff
 black
 h5py
 requests
+shapely

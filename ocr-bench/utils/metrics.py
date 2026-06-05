@@ -6,6 +6,8 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 import re
 from tqdm import tqdm
+from shapely.geometry import box as ShapelyBox
+from shapely.ops import unary_union
 
 
 def box_area(box):
@@ -28,58 +30,93 @@ def calculate_iou_metrics(predictions: List[List], ground_truth: List[List]) -> 
     return penalized_iou_score(predictions, ground_truth)
 
 
+def penalized_iou_score(preds, references):
+    matches = match_boxes(preds, references)
+    iou = sum([match[2] for match in matches]) / len(matches)
+    return iou
+
+
+def match_boxes(preds, references, coverage_threshold=0.5):
+    num_actual = len(references)
+    num_predicted = len(preds)
+
+    if num_actual == 0 or num_predicted == 0:
+        return [(i, None, -1.0) for i in range(num_actual)] + [
+            (None, j, 0.0) for j in range(num_predicted)
+        ]
+
+    # 1. Tính ma trận bao phủ (box1_only=True)
+    # iou_matrix[i, j] nghĩa là: Pred_j bao phủ bao nhiêu % diện tích của GT_i
+    iou_matrix = np.zeros((num_actual, num_predicted))
+    for i, actual in enumerate(references):
+        for j, pred in enumerate(preds):
+            iou_matrix[i, j] = calculate_iou(actual, pred, box1_only=True)
+
+    assigned_actual = set()
+    assigned_pred = set()
+    matches = []
+
+    # 2. Bước quét thứ nhất: Tìm các cặp khớp tốt nhất vượt ngưỡng (Ví dụ > 0.5)
+    # Không dùng vòng lặp Greedy toàn cục nữa, mà xét điều kiện bao phủ cho từng thực thể
+
+    # Đối với mỗi GT_i, tìm xem có Pred_j nào bao phủ nó tốt không
+    for i in range(num_actual):
+        best_j = np.argmax(iou_matrix[i, :])
+        highest_coverage = iou_matrix[i, best_j]
+
+        if highest_coverage >= coverage_threshold:
+            if highest_coverage > 0.95:
+                highest_coverage = 1.0
+            matches.append((i, best_j, highest_coverage))
+            assigned_actual.add(i)
+            assigned_pred.add(best_j)
+
+    # Đối với mỗi Pred_j chưa được gán, kiểm tra xem nó có nằm gọn trong GT_i nào không
+    # (Để giải quyết trường hợp 2 Pred nằm trong 1 GT mà bạn nói)
+    for j in range(num_predicted):
+        if j in assigned_pred:
+            continue
+        # Tìm GT_i mà Pred_j này bao phủ tốt nhất (hoặc ngược lại)
+        best_i = np.argmax(iou_matrix[:, j])
+        # Nếu Pred_j này đóng góp bao phủ tốt cho một GT_i nào đó
+        if iou_matrix[best_i, j] >= coverage_threshold:
+            matches.append((best_i, j, iou_matrix[best_i, j]))
+            assigned_actual.add(best_i)
+            assigned_pred.add(j)
+
+    # 3. Gom các hộp không được giao và áp mức phạt theo ý bạn
+    unassigned_actual = set(range(num_actual)) - assigned_actual
+    unassigned_pred = set(range(num_predicted)) - assigned_pred
+
+    # GT sót: Phạt cực nặng -1.0
+    matches.extend([(i, None, -1.0) for i in unassigned_actual])
+    # Pred dư/nhiễu: Phạt 0.0
+    matches.extend([(None, j, 0.0) for j in unassigned_pred])
+
+    return matches
+
+
 def calculate_iou(box1, box2, box1_only=False):
-    intersection = intersection_area(box1, box2)
-    union = box_area(box1)
+    intersection = intersection_area(box1, box2)  # Area of overlap
+    union = box_area(box1)  # Area of box1
     if not box1_only:
-        union += box_area(box2) - intersection
+        union += box_area(box2) - intersection  # Total area covered by both boxes
 
     if union == 0:
         return 0
     return intersection / union
 
 
-def match_boxes(preds, references):
-    num_actual = len(references)
-    num_predicted = len(preds)
+def intersection_area(box1, box2):
+    x_left = max(box1[0], box2[0])
+    y_top = max(box1[1], box2[1])
+    x_right = min(box1[2], box2[2])
+    y_bottom = min(box1[3], box2[3])
 
-    iou_matrix = np.zeros((num_actual, num_predicted))
-    for i, actual in enumerate(references):
-        for j, pred in enumerate(preds):
-            iou_matrix[i, j] = calculate_iou(actual, pred, box1_only=True)
+    if x_right < x_left or y_bottom < y_top:
+        return 0.0
 
-    sorted_indices = np.argsort(iou_matrix, axis=None)[::-1]
-    sorted_ious = iou_matrix.flatten()[sorted_indices]
-    actual_indices, predicted_indices = np.unravel_index(
-        sorted_indices, iou_matrix.shape
-    )
-
-    assigned_actual = set()
-    assigned_pred = set()
-
-    matches = []
-    for idx, iou in zip(zip(actual_indices, predicted_indices), sorted_ious):
-        i, j = idx
-        if i not in assigned_actual and j not in assigned_pred:
-            iou_val = iou_matrix[i, j]
-            if iou_val > 0.95:  # Account for rounding on box edges
-                iou_val = 1.0
-            matches.append((i, j, iou_val))
-            assigned_actual.add(i)
-            assigned_pred.add(j)
-
-    unassigned_actual = set(range(num_actual)) - assigned_actual
-    unassigned_pred = set(range(num_predicted)) - assigned_pred
-    matches.extend([(i, None, -1.0) for i in unassigned_actual])
-    matches.extend([(None, j, 0.0) for j in unassigned_pred])
-
-    return matches
-
-
-def penalized_iou_score(preds, references):
-    matches = match_boxes(preds, references)
-    iou = sum([match[2] for match in matches]) / len(matches)
-    return iou
+    return (x_right - x_left) * (y_bottom - y_top)
 
 
 def intersection_pixels(box1, box2):
@@ -100,85 +137,57 @@ def intersection_pixels(box1, box2):
     return pixels
 
 
-def calculate_coverage(box, other_boxes, penalize_double=False):
-    box_area = (box[2] - box[0]) * (box[3] - box[1])
-    if box_area == 0:
-        return 0
-
-    # find total coverage of the box
-    covered_pixels = set()
-    double_coverage = list()
-    for other_box in other_boxes:
-        ia = intersection_pixels(box, other_box)
-        double_coverage.append(list(covered_pixels.intersection(ia)))
-        covered_pixels = covered_pixels.union(ia)
-
-    # Penalize double coverage - having multiple bboxes overlapping the same pixels
-    double_coverage_penalty = len(double_coverage)
-    if not penalize_double:
-        double_coverage_penalty = 0
-    covered_pixels_count = max(0, len(covered_pixels) - double_coverage_penalty)
-    return covered_pixels_count / box_area
-
-
-def intersection_area(box1, box2):
-    x_left = max(box1[0], box2[0])
-    y_top = max(box1[1], box2[1])
-    x_right = min(box1[2], box2[2])
-    y_bottom = min(box1[3], box2[3])
-
-    if x_right < x_left or y_bottom < y_top:
+def calculate_coverage(box, other_boxes, penalize_double=True):
+    """Tính tỷ lệ bao phủ của box bởi các other_boxes sử dụng Shapely."""
+    main_poly = ShapelyBox(box[0], box[1], box[2], box[3])
+    if main_poly.area == 0 or len(other_boxes) == 0:
         return 0.0
 
-    return (x_right - x_left) * (y_bottom - y_top)
+    # Lấy danh sách các vùng giao nhau thực tế với hộp gốc
+    intersections = []
+    for ob in other_boxes:
+        other_poly = ShapelyBox(ob[0], ob[1], ob[2], ob[3])
+        inter = main_poly.intersection(other_poly)
+        if not inter.is_empty:
+            intersections.append(inter)
+
+    if not intersections:
+        return 0.0
+
+    # Diện tích phủ phẳng thực tế (Vùng chồng lấn chỉ tính 1 lần duy nhất)
+    net_coverage_area = unary_union(intersections).area
+
+    if not penalize_double:
+        # Nếu KHÔNG phạt trùng lắp: Trả về tỷ lệ phủ phẳng thuần túy
+        return net_coverage_area / main_poly.area
+    else:
+        # Nếu CÓ phạt trùng lắp:
+        # Lấy tổng diện tích giao thô (có tính trùng) trừ đi diện tích phủ phẳng
+        gross_intersection_area = sum(inter.area for inter in intersections)
+        overlap_area = gross_intersection_area - net_coverage_area
+
+        # Phạt bằng cách lấy diện tích phủ phẳng trừ đi diện tích bị tính trùng
+        final_area = max(0.0, net_coverage_area - overlap_area)
+        return final_area / main_poly.area
 
 
-def calculate_coverage_fast(box, other_boxes, penalize_double=False):
-    box = np.array(box)
-    other_boxes = np.array(other_boxes)
-
-    # Calculate box area
-    box_area = (box[2] - box[0]) * (box[3] - box[1])
-    if box_area == 0:
-        return 0
-
-    x_left = np.maximum(box[0], other_boxes[:, 0])
-    y_top = np.maximum(box[1], other_boxes[:, 1])
-    x_right = np.minimum(box[2], other_boxes[:, 2])
-    y_bottom = np.minimum(box[3], other_boxes[:, 3])
-
-    widths = np.maximum(0, x_right - x_left)
-    heights = np.maximum(0, y_bottom - y_top)
-    intersect_areas = widths * heights
-
-    total_intersect = np.sum(intersect_areas)
-
-    return min(1.0, total_intersect / box_area)
-
-
-def precision_recall(preds, references, threshold=0.5, workers=8, penalize_double=True):
+def precision_recall_f1(preds, references, threshold=0.7, workers=8, penalize_double=True):
+    """Tính Precision và Recall dựa trên diện tích bao phủ."""
     if len(references) == 0:
-        return {
-            "precision": 1,
-            "recall": 1,
-        }
+        return {"precision": 1.0, "recall": 1.0, "f1": 1.0}
 
     if len(preds) == 0:
-        return {
-            "precision": 0,
-            "recall": 0,
-        }
+        return {"precision": 0.0, "recall": 0.0, "f1": 0.0}
 
-    # If we're not penalizing double coverage, we can use a faster calculation
-    coverage_func = calculate_coverage_fast
-    if penalize_double:
-        coverage_func = calculate_coverage
-
+    # Đồng nhất sử dụng duy nhất hàm calculate_coverage của Shapely để đảm bảo logic đúng
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        precision_func = partial(coverage_func, penalize_double=penalize_double)
-        precision_iou = executor.map(precision_func, preds, repeat(references))
-        reference_iou = executor.map(coverage_func, references, repeat(preds))
+        precision_func = partial(calculate_coverage, penalize_double=penalize_double)
 
+        # Song song hóa việc tính toán cho từng bounding box
+        precision_iou = executor.map(precision_func, preds, repeat(references))
+        reference_iou = executor.map(precision_func, references, repeat(preds))
+
+    # Áp ngưỡng threshold (Bạn nên để 0.7 hoặc 0.8 cho bài toán textline như đã thảo luận)
     precision_classes = [1 if i > threshold else 0 for i in precision_iou]
     precision = sum(precision_classes) / len(precision_classes)
 
@@ -188,6 +197,7 @@ def precision_recall(preds, references, threshold=0.5, workers=8, penalize_doubl
     return {
         "precision": precision,
         "recall": recall,
+        "f1": 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0,
     }
 
 
@@ -397,7 +407,7 @@ def calculate_recognition_metrics(
     return {
         "cer": np.mean(cer_scores) if cer_scores else 0.0,
         "wer": np.mean(wer_scores) if wer_scores else 0.0,
-        "accuracy": recognition_accuracy(references, hypotheses),
+        "accuracy": recognition_accuracy(cleaned_refs, cleaned_hyps),
         "cer_scores": cer_scores,
         "wer_scores": wer_scores,
     }
