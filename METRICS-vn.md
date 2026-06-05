@@ -37,26 +37,18 @@ Tương tự như CER nhưng đơn vị tính toán được chuyển từ cấp
 
 ---
 
-## 2. Tầng Phát Hiện Dòng Chữ (Textline Detection Metrics)
+## 2. Textline Detection Metrics
 
+
+### 2.1. Precision & Recall ở Object-level
 Tự thiết kế bộ đánh giá dựa trên **Diện tích bao phủ thực tế (Coverage/Area-based Approach)** kết hợp thư viện toán hình học `shapely` để xử lý bài toán gãy dòng và trùng lắp hộp.
 
-### 2.1. Phương pháp tính độ phủ (`calculate_coverage`)
-Thay vì tính toán IoU 1-1 thông thường, hệ thống đứng từ hai góc nhìn độc lập để chấm điểm từng Bounding Box:
+#### Phương pháp tính độ phủ
 
-* **Góc nhìn Precision:** Lấy từng hộp Dự đoán (`pred`) tính tỷ lệ diện tích nó bọc trúng vào các hộp nhãn gốc (`references`).
-* **Góc nhìn Recall:** Lấy từng hộp Nhãn gốc (`reference`) tính tỷ lệ diện tích nó được che phủ bởi toàn bộ các hộp dự đoán (`preds`).
-* **Góc nhìn F1:** Chỉ số trung bình điều hòa (Harmonic Mean) giữa Precision và Recall. F1-Score đóng vai trò là thước đo đại diện duy nhất để đánh giá toàn diện năng lực của mô hình Detection, đảm bảo mô hình không bị lệch về hướng bắt thừa (Precision thấp) hay bỏ sót (Recall thấp).
+* **Precision:** Lấy từng hộp Dự đoán (`pred`) tính tỷ lệ diện tích nó bọc trúng vào các hộp nhãn gốc (`references`).
+* **Recall:** Lấy từng hộp Nhãn gốc (`reference`) tính tỷ lệ diện tích nó được che phủ bởi toàn bộ các hộp dự đoán (`preds`).
 
-### 2.2. Cơ chế hình phạt (`penalize_double=True`)
-Nhằm ngăn chặn mô hình "ăn gian" điểm số bằng cách đẻ ra nhiều hộp trùng đè lên nhau (Double Detection) hoặc gãy dòng, hệ thống áp dụng nguyên lý toán học:
-
-$$\text{Overlap Area (Diện tích trùng)} = \text{Tổng diện tích giao thô} - \text{Diện tích phủ phẳng (Union)}$$
-$$\text{Final Area (Diện tích sau phạt)} = \max(0.0, \text{Diện tích phủ phẳng} - \text{Overlap Area})$$
-
-Vùng không gian bị đè càng nhiều, diện tích phạt càng lớn, giúp triệt tiêu điểm số của các hộp dự đoán dư thừa rác.
-
-### 2.3. Precision & Recall ở cấp độ Hộp (Object-level)
+#### Tính toán Precision & Recall
 Sau khi chấm điểm độ phủ diện tích cho từng hộp, hệ thống áp một ngưỡng chấp nhận được **$\text{Threshold} = 0.5$** để dán nhãn Đúng ($1$) hoặc Sai ($0$). Ngưỡng này đảm bảo các hộp dự đoán làm mất dấu thanh hoặc cắt cụt chữ sẽ bị loại bỏ.
 
 * **Precision (Độ chính xác):**
@@ -65,15 +57,37 @@ Sau khi chấm điểm độ phủ diện tích cho từng hộp, hệ thống �
     $$\text{Recall} = \frac{\text{Số lượng dòng chữ thật đạt chuẩn độ phủ (> Threshold)}}{\text{Tổng số lượng dòng chữ thực tế}}$$
 * **F1-Score (Điểm F1 tổng hợp):**
     $$\text{F1-Score} = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$$
+    *Chỉ số **F1-score** là trung bình điều hòa giữa Precision và Recall. **F1-Score** đóng vai trò là thước đo đại diện duy nhất để đánh giá toàn diện năng lực của mô hình Detection, đảm bảo mô hình không bị lệch về hướng bắt thừa **(Precision thấp)** hay bỏ sót **(Recall thấp)**.*
 
 ---
 
-## 3. Thang Hình Phạt Tổng Hợp (Penalized IoU)
+### 2.2. IoU cấp độ trang (page-level)
 
-Đối với các báo cáo cần quy về một chỉ số IoU tổng hợp đại diện duy nhất (`match_boxes`), hệ thống áp dụng cơ chế phân hóa hình phạt dựa trên mức độ nghiêm trọng của lỗi đối với pipeline OCR:
+Độ đo này đánh giá sự khít khao, vuông vức và độ chính xác hình học tổng thể của toàn bộ hệ thống hộp dự đoán (`preds`) so với dòng nhãn gốc (`references`) trên phạm vi toàn bức ảnh.
 
-| Loại trạng thái hình học | Điểm IoU gán | Mức độ nặng | Ý nghĩa thực tế |
-| :--- | :---: | :---: | :--- |
-| **Khớp chuẩn hình học** | Từ $0.5 \rightarrow 1.0$ | Không phạt | Hộp bọc vừa vặn, ôm khít dòng chữ thật. |
-| **Dự đoán dư thừa / Nhiễu** (`unassigned_pred`) | **$0.0$** | Nhẹ | Mô hình vẽ bậy ra nền trống. Tầng Recognition cắt ra chuỗi rỗng $\rightarrow$ dễ lọc bỏ. |
-| **Bỏ sót hoàn toàn chữ** (`unassigned_actual`) | **$-1.0$** | Cực nặng | Mô hình làm mất hẳn dòng chữ. Tầng OCR phía sau hoàn toàn mù tịt $\rightarrow$ Phạt sập điểm hệ thống. |
+#### Quy ước hình học
+Thay vì tính toán IoU cho từng cặp hộp riêng lẻ (vốn dễ bị đánh lừa bởi lỗi gãy dòng hoặc trùng đè), sử dụng thư viện `shapely` để xử lý liên kết topo phẳng:
+1. Gom toàn bộ các hộp dự đoán đơn lẻ thành một khối đa giác phẳng duy nhất ($\mathcal{P}_{\text{union}}$).
+2. Gom toàn bộ các hộp thực tế đơn lẻ thành một khối đa giác phẳng duy nhất ($\mathcal{G}_{\text{union}}$).
+
+#### 2.2.2. Công thức toán học
+
+Chỉ số **Page-Level IoU** được tính toán dựa trên tỷ lệ giữa diện tích giao phẳng và diện tích hợp phẳng của hai khối thông tin khổng lồ này:
+
+$$IoU_{\text{page}} = \frac{\text{Area}(\mathcal{P}_{\text{union}} \cap \mathcal{G}_{\text{union}})}{\text{Area}(\mathcal{P}_{\text{union}} \cup \mathcal{G}_{\text{union}})}$$
+
+*Với:*
+
+$$\text{Area}(\mathcal{P}_{\text{union}} \cup \mathcal{G}_{\text{union}}) = \text{Area}(\mathcal{P}_{\text{union}}) + \text{Area}(\mathcal{G}_{\text{union}}) - \text{Area}(\mathcal{P}_{\text{union}} \cap \mathcal{G}_{\text{union}})$$
+
+*Trong đó:*
+* $\mathcal{P}_{\text{union}} = \bigcup_{p \in \text{preds}} p$: Đa giác phủ phẳng của tập hợp các hộp dự đoán.
+* $\mathcal{G}_{\text{union}} = \bigcup_{g \in \text{references}} g$: Đa giác phủ phẳng của tập hợp các hộp nhãn gốc.
+* $\cap$: Phép toán giao hai tập hợp hình học (Intersection).
+* $\cup$: Phép toán hợp hai tập hợp hình học (Union).
+
+#### Các trường hợp biên (Corner Cases)
+Hệ thống quy định chặt chẽ các giá trị trả về trong trường hợp trang tài liệu trống hoặc mô hình không phát hiện được thực thể:
+* **$IoU_{\text{page}} = 1.0$**: Khi trang tài liệu hoàn toàn trống (không có chữ thật) và mô hình dự đoán cũng hoàn toàn sạch sẽ, không vẽ bậy ($\text{len}(\text{gts}) = 0 \text{ and } \text{len}(\text{preds}) = 0$).
+* **$IoU_{\text{page}} = 0.0$**: Khi một trong hai tập hợp bị trống hoàn toàn trong khi tập hợp còn lại có dữ liệu (ví dụ: ảnh có chữ nhưng mô hình sót $100\%$, hoặc ảnh trống nhưng mô hình vẽ bậy khắp nơi).
+* **Ngưỡng chấp nhận**: Trong các bài toán nhận diện vật thể (Object Detection), kết quả dự đoán thường được coi là đúng (True Positive) nếu **$IoU ≥ 0.5$**
