@@ -9,12 +9,8 @@ from utils.bbox import get_pdf_lines
 from utils.metrics import (
     precision_recall_f1_coverage,
     calculate_iou,
-    calculate_word_coverage_by_textline,
-    calculate_textline_overlap_noise,
-    calculate_absolute_orphan_rate,
 )
 from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
-from surya.debug.draw import draw_polys_on_image
 from surya.common.util import rescale_bbox
 from surya.settings import settings
 from surya.detection import DetectionPredictor
@@ -27,6 +23,7 @@ import datasets
 from pdf2image import convert_from_bytes
 import io
 from PIL import Image
+from utils.bbox import draw_bboxes_on_image
 import h5py
 import requests
 import gc
@@ -69,7 +66,7 @@ def download_h5_file(url: str, output_path: str) -> str:
 
 def load_h5_detection_data(
     h5_path: str, max_rows: int = 100, max_size_limit: Optional[int] = None
-) -> Tuple[List, List, List]:
+) -> Tuple[List, List]:
     """Load detection data from a single H5 file with memory optimization.
 
     Args:
@@ -82,7 +79,6 @@ def load_h5_detection_data(
     """
     images = []
     all_line_bboxes = []
-    all_word_bboxes = []
     sample_count = 0
 
     with h5py.File(h5_path, "r") as f:
@@ -122,12 +118,8 @@ def load_h5_detection_data(
 
                 # Extract line_bboxes
                 line_bboxes = []
-                word_bboxes = []
-                for line, word in zip(
-                    annotation.get("line_bboxes", []), annotation.get("word_bboxes", [])
-                ):
+                for line in annotation.get("line_bboxes", []):
                     line_bbox = line.get("bbox", [])
-                    word_bbox = word.get("bbox", [])
                     if line_bbox:
                         # bbox format: [x, y, w, h] -> convert to [x1, y1, x2, y2]
                         x, y, w, h = line_bbox
@@ -144,33 +136,14 @@ def load_h5_detection_data(
                         else:
                             line_bboxes.append([x, y, x + w, y + h])
 
-                    if word_bbox:
-                        x, y, w, h = word_bbox
-                        if scale_factor != 1.0:
-                            word_bboxes.append(
-                                [
-                                    x * scale_factor,
-                                    y * scale_factor,
-                                    (x + w) * scale_factor,
-                                    (y + h) * scale_factor,
-                                ]
-                            )
-                        else:
-                            word_bboxes.append([x, y, x + w, y + h])
-
                 all_line_bboxes.append(line_bboxes)
-                all_word_bboxes.append(word_bboxes)
                 sample_count += 1
-
-                # Garbage collection every 50 samples to free memory
-                if sample_count % 50 == 0:
-                    gc.collect()
 
             except Exception as e:
                 print(f"Warning: Error processing sample {idx}: {e}")
                 continue
 
-    return images, all_line_bboxes, all_word_bboxes
+    return images, all_line_bboxes
 
 
 def load_nvidia_ocr_multilingual_dataset(
@@ -178,7 +151,7 @@ def load_nvidia_ocr_multilingual_dataset(
     max_rows: int = 100,
     language: str = "en",
     max_size_limit: Optional[int] = None,
-) -> Tuple[List, List, List]:
+) -> Tuple[List, List]:
     """Load NVIDIA OCR Synthetic Multilingual dataset from H5 files with memory optimization.
 
     Args:
@@ -193,12 +166,11 @@ def load_nvidia_ocr_multilingual_dataset(
         - images: List of PIL images
         - bboxes: List of line_bboxes per image
     """
-    base_url = f"https://huggingface.co/datasets/nvidia/OCR-Synthetic-Multilingual-v1/resolve/main/{language}/train"
+    base_url = f"https://huggingface.co/datasets/nvidia/OCR-Synthetic-Multilingual-v1/resolve/main/{language}/test"
     cache_dir = os.path.expanduser("~/.cache/nvidia_ocr_multilingual")
 
     images = []
     all_line_bboxes = []
-    all_word_bboxes = []
     sample_count = 0
 
     for h5_file in h5_files:
@@ -219,17 +191,16 @@ def load_nvidia_ocr_multilingual_dataset(
 
             # Load from H5 file
             remaining = max_rows - sample_count
-            img_batch, line_bboxes, word_bboxes = load_h5_detection_data(
+            img_batch, line_bboxes = load_h5_detection_data(
                 local_path, remaining, max_size_limit=max_size_limit
             )
 
             images.extend(img_batch)
             all_line_bboxes.extend(line_bboxes)
-            all_word_bboxes.extend(word_bboxes)
             sample_count += len(img_batch)
 
             # Clear batch after extending to free memory
-            del img_batch, line_bboxes, word_bboxes
+            del img_batch, line_bboxes
             gc.collect()
 
         except Exception as e:
@@ -237,7 +208,7 @@ def load_nvidia_ocr_multilingual_dataset(
             continue
 
     print(f"Loaded {len(images)} total images")
-    return images, all_line_bboxes, all_word_bboxes
+    return images, all_line_bboxes
 
 
 def load_pdfa_detection_dataset(
@@ -406,10 +377,8 @@ def main(
         print(f"Loading dataset: {dataset_name}")
         pathname = f"nvidia_ocr_{language}"
         h5_file_list = [f.strip() for f in h5_files.split(",")]
-        images, correct_line_boxes, correct_word_boxes = (
-            load_nvidia_ocr_multilingual_dataset(
-                h5_file_list, max_rows, language, max_size_limit=max_size_limit
-            )
+        images, correct_line_boxes = load_nvidia_ocr_multilingual_dataset(
+            h5_file_list, max_rows, language, max_size_limit=max_size_limit
         )
     else:
         raise ValueError("Either pdf_path or dataset_name must be provided")
@@ -426,6 +395,10 @@ def main(
     predictions = det_predictor(images, batch_size=batch_size)
     inference_time = time.time() - start
 
+    if debug:
+        debug_path = os.path.join(results_dir, "debug")
+        os.makedirs(debug_path, exist_ok=True)
+
     folder_name = pathname
     result_path = os.path.join(results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
@@ -434,30 +407,37 @@ def main(
     print("Calculating metrics...")
     page_metrics = collections.OrderedDict()
 
-    for idx, (sb, clb, cwb) in enumerate(
+    for idx, (sb, clb) in enumerate(
         tqdm(
-            zip(predictions, correct_line_boxes, correct_word_boxes),
+            zip(
+                predictions,
+                correct_line_boxes,
+            ),
             total=len(predictions),
         )
     ):
         surya_boxes = [s.bbox for s in sb.bboxes]
-        surya_polys = [s.polygon for s in sb.bboxes]
 
         # Calculate precision and recall
         raw_metrics = precision_recall_f1_coverage(surya_boxes, clb)
         metrics = {k: float(v) for k, v in raw_metrics.items()}
 
         metrics["page_iou"] = calculate_iou(surya_boxes, clb)
-        metrics["word_coverage"] = calculate_word_coverage_by_textline(surya_boxes, cwb)
-        metrics["word_overlap_noise"] = calculate_textline_overlap_noise(
-            surya_boxes, cwb
-        )
-        metrics["orphan_rate"] = calculate_absolute_orphan_rate(surya_boxes, clb)
         page_metrics[idx] = metrics
 
         if debug:
-            bbox_image = draw_polys_on_image(surya_polys, copy.deepcopy(images[idx]))
-            bbox_image.save(os.path.join(result_path, f"{idx}_bbox.png"))
+
+            combined_image = copy.deepcopy(images[idx])
+
+            combined_image = draw_bboxes_on_image(
+                combined_image, clb, color="green", width=2
+            )
+
+            combined_image = draw_bboxes_on_image(
+                combined_image, surya_boxes, color="red", width=2
+            )
+
+            combined_image.save(os.path.join(debug_path, f"{idx}_bbox_debug.png"))
 
     # Calculate mean metrics
     mean_metrics = {}
@@ -501,16 +481,6 @@ def main(
     print(
         "  - Page IOU: Intersection over Union for the entire page (higher is better)"
     )
-    print(
-        "  - Word Coverage: Percentage of ground truth words covered by any predicted line (higher is better)"
-    )
-    print(
-        "  - Word Overlap Noise: Average number of predicted lines that overlap with each ground truth word (lower is better)"
-    )
-    print(
-        "  - Orphan Rate: Percentage of ground truth lines that are not covered by any predicted line (lower is better)"
-    )
-
     print(
         f"  - Inference Time: {inference_time:.2f}s total, {inference_time/len(images):.4f}s per sample"
     )
