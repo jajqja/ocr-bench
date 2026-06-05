@@ -46,6 +46,7 @@ Instead of classic 1-to-1 IoU bounding box matching, the system calculates area 
 
 * **Precision Perspective:** Iterates through each predicted bounding box (`pred`) to measure what percentage of its area falls cleanly inside the actual text regions (`references`).
 * **Recall Perspective:** Iterates through each ground truth box (`reference`) to measure what percentage of its area is successfully enveloped by the model's predictions (`preds`).
+* **F1 Perspective:** The harmonic mean of Precision and Recall. F1-Score serves as the single primary benchmark metric to comprehensively evaluate the overall performance of the detection model, ensuring that the model is penalized for both over-detection (low Precision) and under-detection (low Recall).
 
 ### 2.2. Penalization Mechanism (`penalize_double=True`)
 To prevent the model from "gaming" the metrics by predicting multiple overlapping boxes over a single line (Double Detection) or fracturing a line into pieces, the following geometric penalty is applied:
@@ -62,6 +63,8 @@ After computing the area coverage score for every individual box, the system app
     $$\text{Precision} = \frac{\text{Number of Predicted Bboxes exceeding Threshold (> Threshold)}}{\text{Total Number of Predicted Bboxes}}$$
 * **Recall:**
     $$\text{Recall} = \frac{\text{Number of Ground Truth Textlines exceeding Threshold (> Threshold)}}{\text{Total Number of Actual Textlines}}$$
+* **F1-Score (Unified F1-Score):**
+    $$\text{F1-Score} = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$$
 
 ---
 

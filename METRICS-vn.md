@@ -46,6 +46,7 @@ Thay vì tính toán IoU 1-1 thông thường, hệ thống đứng từ hai gó
 
 * **Góc nhìn Precision:** Lấy từng hộp Dự đoán (`pred`) tính tỷ lệ diện tích nó bọc trúng vào các hộp nhãn gốc (`references`).
 * **Góc nhìn Recall:** Lấy từng hộp Nhãn gốc (`reference`) tính tỷ lệ diện tích nó được che phủ bởi toàn bộ các hộp dự đoán (`preds`).
+* **Góc nhìn F1:** Chỉ số trung bình điều hòa (Harmonic Mean) giữa Precision và Recall. F1-Score đóng vai trò là thước đo đại diện duy nhất để đánh giá toàn diện năng lực của mô hình Detection, đảm bảo mô hình không bị lệch về hướng bắt thừa (Precision thấp) hay bỏ sót (Recall thấp).
 
 ### 2.2. Cơ chế hình phạt (`penalize_double=True`)
 Nhằm ngăn chặn mô hình "ăn gian" điểm số bằng cách đẻ ra nhiều hộp trùng đè lên nhau (Double Detection) hoặc gãy dòng, hệ thống áp dụng nguyên lý toán học:
@@ -62,6 +63,8 @@ Sau khi chấm điểm độ phủ diện tích cho từng hộp, hệ thống �
     $$\text{Precision} = \frac{\text{Số lượng Bbox dự đoán đạt chuẩn độ phủ (> Threshold)}}{\text{Tổng số lượng Bbox mô hình đưa ra}}$$
 * **Recall (Độ nhạy):**
     $$\text{Recall} = \frac{\text{Số lượng dòng chữ thật đạt chuẩn độ phủ (> Threshold)}}{\text{Tổng số lượng dòng chữ thực tế}}$$
+* **F1-Score (Điểm F1 tổng hợp):**
+    $$\text{F1-Score} = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$$
 
 ---
 
