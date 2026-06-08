@@ -379,7 +379,6 @@ def main(
     else:
         raise ValueError("Either pdf_path or dataset_name must be provided")
 
-    print(f"Loaded {len(images)} images")
 
     # Bắt đầu từ đoạn chạy inference trong hàm main()
     print("Running inference and calculating metrics in chunks...")
