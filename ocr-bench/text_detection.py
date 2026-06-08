@@ -292,6 +292,12 @@ def load_pdfa_detection_dataset(
     default=8,
 )
 @click.option(
+    "--chunk_size",
+    type=int,
+    help="Number of samples to process in each chunk when loading large datasets.",
+    default=10000,
+)
+@click.option(
     "--max_size_limit",
     type=int,
     help="Maximum size for largest image dimension (maintains aspect ratio, e.g., 1024). Leave empty to keep original size.",
@@ -307,6 +313,7 @@ def main(
     language: str,
     h5_files: str,
     batch_size: int,
+    chunk_size: int,
     max_size_limit: Optional[int],
     hf_token: Optional[str] = None,
 ):
@@ -318,7 +325,6 @@ def main(
             f"Images will be resized to maintain aspect ratio with max size limit = {max_size_limit} px"
         )
 
-    chunk_size = 10000
     data_generator = None
     total_samples = 0
 
@@ -379,7 +385,6 @@ def main(
     else:
         raise ValueError("Either pdf_path or dataset_name must be provided")
 
-
     # Bắt đầu từ đoạn chạy inference trong hàm main()
     print("Running inference and calculating metrics in chunks...")
 
@@ -396,19 +401,23 @@ def main(
     result_path = os.path.join(results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
-    # 1. Process Chunk by Chunk
     for img_chunk, bbox_chunk in data_generator:
         chunk_length = len(img_chunk)
         total_samples += chunk_length
         print(f"\nProcessing chunk of {chunk_length} images...")
 
-        # Inference
         start = time.time()
         predictions = det_predictor(img_chunk, batch_size=batch_size)
         total_inference_time += time.time() - start
 
-        # Metrics cho chunk hiện tại
-        for local_idx, (sb, clb) in enumerate(zip(predictions, bbox_chunk)):
+        for local_idx, (sb, clb) in enumerate(
+            tqdm(
+                zip(predictions, bbox_chunk),
+                total=chunk_length,
+                desc=f"Processing chunk {global_idx}-{global_idx + chunk_length}",
+                leave=False,  # CÁCH FIX 2: Thêm leave=False để dọn dẹp thanh tiến trình cũ khi xong chunk
+            )
+        ):
             surya_boxes = [s.bbox for s in sb.bboxes]
 
             # Tính precision, recall, f1
@@ -433,13 +442,11 @@ def main(
 
             global_idx += 1
 
-        # CLEAR RAM NGAY LẬP TỨC CHO CHUNK NÀY
         del img_chunk, bbox_chunk, predictions
         gc.collect()
 
     print(f"\nFinished processing {total_samples} total images.")
 
-    # 2. Calculate mean metrics (Đã gom chung từ tất cả các chunks)
     print("Calculating mean metrics...")
     mean_metrics = {}
     metric_types = []
