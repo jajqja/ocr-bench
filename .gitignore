@@ -219,3 +219,7 @@ __marimo__/
 
 # Model path
 model_path/
+
+excels/*
+
+results/*
