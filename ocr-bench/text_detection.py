@@ -1,7 +1,7 @@
 import collections
 import copy
 import json
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Generator
 
 import click
 
@@ -65,38 +65,29 @@ def download_h5_file(url: str, output_path: str) -> str:
 
 
 def load_h5_detection_data(
-    h5_path: str, max_rows: int = 100, max_size_limit: Optional[int] = None
-) -> Tuple[List, List]:
-    """Load detection data from a single H5 file with memory optimization.
-
-    Args:
-        h5_path: Path to H5 file
-        max_rows: Maximum number of samples to load
-        max_size_limit: Optional maximum size for the largest dimension (maintains aspect ratio)
-
-    Returns:
-        Tuple of (images, bboxes)
-    """
+    h5_path: str,
+    max_rows: int = 100,
+    max_size_limit: Optional[int] = None,
+    chunk_size: int = 10000,
+) -> Generator[Tuple[List, List], None, None]:
+    """Load detection data from a single H5 file using a Generator to save memory."""
     images = []
     all_line_bboxes = []
     sample_count = 0
 
     with h5py.File(h5_path, "r") as f:
         num_samples = len(f["images"])
+        total_to_load = min(num_samples, max_rows)
 
         for idx in tqdm(
-            range(num_samples), total=min(num_samples, max_rows), desc="Loading H5 data"
+            range(total_to_load), desc=f"Loading H5 data ({os.path.basename(h5_path)})"
         ):
-            if sample_count >= max_rows:
-                break
-
             try:
                 # Load image from bytes
                 img_bytes = f["images"][idx]
                 image = Image.open(io.BytesIO(bytes(img_bytes))).convert("RGB")
-                original_size = image.size  # (width, height)
+                original_size = image.size
 
-                # Resize image if requested (to save memory), maintaining aspect ratio
                 scale_factor = 1.0
                 if max_size_limit:
                     max_dim = max(original_size)
@@ -116,14 +107,11 @@ def load_h5_detection_data(
                     annotation_str = annotation_str.decode("utf-8")
                 annotation = json.loads(annotation_str)
 
-                # Extract line_bboxes
                 line_bboxes = []
                 for line in annotation.get("line_bboxes", []):
                     line_bbox = line.get("bbox", [])
                     if line_bbox:
-                        # bbox format: [x, y, w, h] -> convert to [x1, y1, x2, y2]
                         x, y, w, h = line_bbox
-                        # Scale bbox if image was resized
                         if scale_factor != 1.0:
                             line_bboxes.append(
                                 [
@@ -139,11 +127,20 @@ def load_h5_detection_data(
                 all_line_bboxes.append(line_bboxes)
                 sample_count += 1
 
+                # Yield chunk when it reaches chunk_size
+                if len(images) >= chunk_size:
+                    yield images, all_line_bboxes
+                    images = []
+                    all_line_bboxes = []
+                    gc.collect()
+
             except Exception as e:
                 print(f"Warning: Error processing sample {idx}: {e}")
                 continue
 
-    return images, all_line_bboxes
+        # Yield remaining samples
+        if images:
+            yield images, all_line_bboxes
 
 
 def load_nvidia_ocr_multilingual_dataset(
@@ -151,64 +148,45 @@ def load_nvidia_ocr_multilingual_dataset(
     max_rows: int = 100,
     language: str = "en",
     max_size_limit: Optional[int] = None,
-) -> Tuple[List, List]:
-    """Load NVIDIA OCR Synthetic Multilingual dataset from H5 files with memory optimization.
-
-    Args:
-        h5_files: List of H5 filenames to download (e.g., ["train_000", "train_001"])
-                  Files will be downloaded from HuggingFace Hub
-        max_rows: Maximum total number of samples to load
-        language: Language to load (en, ja, ko, ru, zh_hans, zh_hant)
-        max_size_limit: Optional maximum size for the largest dimension (maintains aspect ratio)
-
-    Returns:
-        Tuple of (images, bboxes) where:
-        - images: List of PIL images
-        - bboxes: List of line_bboxes per image
-    """
+    chunk_size: int = 10000,
+) -> Generator[Tuple[List, List], None, None]:
     base_url = f"https://huggingface.co/datasets/nvidia/OCR-Synthetic-Multilingual-v1/resolve/main/{language}/train"
     cache_dir = os.path.expanduser("~/.cache/nvidia_ocr_multilingual")
 
-    images = []
-    all_line_bboxes = []
     sample_count = 0
 
     for h5_file in h5_files:
         if sample_count >= max_rows:
             break
 
-        # Ensure filename ends with .h5
         if not h5_file.endswith(".h5"):
             h5_file = f"{h5_file}.h5"
 
-        # Download file
         url = f"{base_url}/{h5_file}?download=true"
         local_path = os.path.join(cache_dir, language, h5_file)
 
         try:
             local_path = download_h5_file(url, local_path)
-            print(f"Loading data from {h5_file}...")
+            print(f"Streaming data from {h5_file}...")
 
-            # Load from H5 file
             remaining = max_rows - sample_count
-            img_batch, line_bboxes = load_h5_detection_data(
-                local_path, remaining, max_size_limit=max_size_limit
-            )
 
-            images.extend(img_batch)
-            all_line_bboxes.extend(line_bboxes)
-            sample_count += len(img_batch)
+            # Iterate through the chunks generated by the H5 loader
+            for img_batch, line_bboxes in load_h5_detection_data(
+                local_path,
+                remaining,
+                max_size_limit=max_size_limit,
+                chunk_size=chunk_size,
+            ):
+                yield img_batch, line_bboxes
+                sample_count += len(img_batch)
 
-            # Clear batch after extending to free memory
-            del img_batch, line_bboxes
-            gc.collect()
+                if sample_count >= max_rows:
+                    break
 
         except Exception as e:
             print(f"Error processing {h5_file}: {e}")
             continue
-
-    print(f"Loaded {len(images)} total images")
-    return images, all_line_bboxes
 
 
 def load_pdfa_detection_dataset(
@@ -340,6 +318,10 @@ def main(
             f"Images will be resized to maintain aspect ratio with max size limit = {max_size_limit} px"
         )
 
+    chunk_size = 10000
+    data_generator = None
+    total_samples = 0
+
     # Load data
     if pdf_path is not None:
         print(f"Loading PDF: {pdf_path}")
@@ -353,6 +335,11 @@ def main(
 
         image_sizes = [img.size for img in images]
         correct_boxes = get_pdf_lines(pdf_path, image_sizes)
+
+        data_generator = [
+            (images, correct_boxes)
+        ]  # Wrap in a single chunk for compatibility
+        total_samples = len(images)
     elif dataset_name is not None and dataset_name == "vikp/doclaynet_bench":
         print(f"Loading dataset: {dataset_name}")
         pathname = dataset_name
@@ -366,34 +353,41 @@ def main(
             correct_boxes.append(
                 [rescale_bbox(b, (1000, 1000), img_size) for b in boxes]
             )
+        data_generator = [(images, correct_boxes)]
+        total_samples = len(images)
     elif dataset_name is not None and dataset_name == "pixparse/pdfa-eng-wds":
         print(f"Loading dataset: {dataset_name}")
         pathname = dataset_name.replace("/", "_")
         images, correct_boxes = load_pdfa_detection_dataset(dataset_name, max_rows)
+        data_generator = [(images, correct_boxes)]
+        total_samples = len(images)
     elif (
         dataset_name is not None
         and dataset_name == "nvidia/OCR-Synthetic-Multilingual-v1"
     ):
-        print(f"Loading dataset: {dataset_name}")
+        print(f"Streaming dataset: {dataset_name} in chunks of {chunk_size}")
         pathname = f"nvidia_ocr_{language}"
         h5_file_list = [f.strip() for f in h5_files.split(",")]
-        images, correct_line_boxes = load_nvidia_ocr_multilingual_dataset(
-            h5_file_list, max_rows, language, max_size_limit=max_size_limit
+        # This is now a generator
+        data_generator = load_nvidia_ocr_multilingual_dataset(
+            h5_file_list,
+            max_rows,
+            language,
+            max_size_limit=max_size_limit,
+            chunk_size=chunk_size,
         )
     else:
         raise ValueError("Either pdf_path or dataset_name must be provided")
 
     print(f"Loaded {len(images)} images")
 
-    if settings.DETECTOR_STATIC_CACHE:
-        # Run through one batch to compile the model
-        det_predictor(images[:1])
+    # Bắt đầu từ đoạn chạy inference trong hàm main()
+    print("Running inference and calculating metrics in chunks...")
 
-    # Run inference
-    print("Running inference...")
-    start = time.time()
-    predictions = det_predictor(images, batch_size=batch_size)
-    inference_time = time.time() - start
+    total_inference_time = 0
+    page_metrics = collections.OrderedDict()
+    global_idx = 0
+    total_samples = 0  # Đảm bảo biến này đã được khởi tạo trước đó
 
     if debug:
         debug_path = os.path.join(results_dir, "debug")
@@ -403,58 +397,72 @@ def main(
     result_path = os.path.join(results_dir, folder_name)
     os.makedirs(result_path, exist_ok=True)
 
-    # Calculate metrics
-    print("Calculating metrics...")
-    page_metrics = collections.OrderedDict()
+    # 1. Process Chunk by Chunk
+    for img_chunk, bbox_chunk in data_generator:
+        chunk_length = len(img_chunk)
+        total_samples += chunk_length
+        print(f"\nProcessing chunk of {chunk_length} images...")
 
-    for idx, (sb, clb) in enumerate(
-        tqdm(
-            zip(
-                predictions,
-                correct_line_boxes,
-            ),
-            total=len(predictions),
-        )
-    ):
-        surya_boxes = [s.bbox for s in sb.bboxes]
+        # Inference
+        start = time.time()
+        predictions = det_predictor(img_chunk, batch_size=batch_size)
+        total_inference_time += time.time() - start
 
-        # Calculate precision and recall
-        raw_metrics = precision_recall_f1_coverage(surya_boxes, clb)
-        metrics = {k: float(v) for k, v in raw_metrics.items()}
+        # Metrics cho chunk hiện tại
+        for local_idx, (sb, clb) in enumerate(zip(predictions, bbox_chunk)):
+            surya_boxes = [s.bbox for s in sb.bboxes]
 
-        metrics["page_iou"] = calculate_iou(surya_boxes, clb)
-        page_metrics[idx] = metrics
+            # Tính precision, recall, f1
+            raw_metrics = precision_recall_f1_coverage(surya_boxes, clb)
+            metrics = {k: float(v) for k, v in raw_metrics.items()}
+            metrics["page_iou"] = calculate_iou(surya_boxes, clb)
 
-        if debug:
+            page_metrics[global_idx] = metrics
 
-            combined_image = copy.deepcopy(images[idx])
+            # Lưu ảnh debug nếu cần
+            if debug:
+                combined_image = copy.deepcopy(img_chunk[local_idx])
+                combined_image = draw_bboxes_on_image(
+                    combined_image, clb, color="green", width=2
+                )
+                combined_image = draw_bboxes_on_image(
+                    combined_image, surya_boxes, color="red", width=2
+                )
+                combined_image.save(
+                    os.path.join(debug_path, f"{global_idx}_bbox_debug.png")
+                )
 
-            combined_image = draw_bboxes_on_image(
-                combined_image, clb, color="green", width=2
-            )
+            global_idx += 1
 
-            combined_image = draw_bboxes_on_image(
-                combined_image, surya_boxes, color="red", width=2
-            )
+        # CLEAR RAM NGAY LẬP TỨC CHO CHUNK NÀY
+        del img_chunk, bbox_chunk, predictions
+        gc.collect()
 
-            combined_image.save(os.path.join(debug_path, f"{idx}_bbox_debug.png"))
+    print(f"\nFinished processing {total_samples} total images.")
 
-    # Calculate mean metrics
+    # 2. Calculate mean metrics (Đã gom chung từ tất cả các chunks)
+    print("Calculating mean metrics...")
     mean_metrics = {}
-    metric_types = sorted(page_metrics[0].keys())
+    metric_types = []
 
-    for m in metric_types:
-        metric_values = [page_metrics[page][m] for page in page_metrics]
-        mean_metrics[m] = sum(metric_values) / len(metric_values)
+    if page_metrics:
+        metric_types = sorted(page_metrics[0].keys())
+        for m in metric_types:
+            metric_values = [page_metrics[page][m] for page in page_metrics]
+            mean_metrics[m] = sum(metric_values) / len(metric_values)
+    else:
+        print("Warning: No metrics calculated. Dataset might be empty.")
 
-    # Save results
+    # 3. Save results
+    time_per_sample = total_inference_time / total_samples if total_samples > 0 else 0
+
     out_data = {
         "dataset": pathname,
         "model": model_path,
-        "num_samples": len(images),
+        "num_samples": total_samples,
         "times": {
-            "total": inference_time,
-            "per_sample": inference_time / len(images),
+            "total": total_inference_time,
+            "per_sample": time_per_sample,
         },
         "mean_metrics": mean_metrics,
         "sample_details": page_metrics,
@@ -463,10 +471,10 @@ def main(
     with open(os.path.join(result_path, "results.json"), "w+", encoding="utf-8") as f:
         json.dump(out_data, f, indent=4)
 
-    # Print results
+    # 4. Print results
     table_headers = ["Model", "Time (s)", "Time per sample (s)"] + metric_types
     table_data = [
-        ["surya", f"{inference_time:.2f}", f"{inference_time / len(images):.4f}"]
+        ["surya", f"{total_inference_time:.2f}", f"{time_per_sample:.4f}"]
         + [f"{mean_metrics[m]:.4f}" for m in metric_types],
     ]
 
@@ -482,7 +490,7 @@ def main(
         "  - Page IOU: Intersection over Union for the entire page (higher is better)"
     )
     print(
-        f"  - Inference Time: {inference_time:.2f}s total, {inference_time/len(images):.4f}s per sample"
+        f"  - Inference Time: {total_inference_time:.2f}s total, {time_per_sample:.4f}s per sample"
     )
 
     print(f"\n✓ Results saved to {result_path}")
