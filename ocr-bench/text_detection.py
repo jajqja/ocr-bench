@@ -166,7 +166,7 @@ def load_nvidia_ocr_multilingual_dataset(
         - images: List of PIL images
         - bboxes: List of line_bboxes per image
     """
-    base_url = f"https://huggingface.co/datasets/nvidia/OCR-Synthetic-Multilingual-v1/resolve/main/{language}/test"
+    base_url = f"https://huggingface.co/datasets/nvidia/OCR-Synthetic-Multilingual-v1/resolve/main/{language}/train"
     cache_dir = os.path.expanduser("~/.cache/nvidia_ocr_multilingual")
 
     images = []
