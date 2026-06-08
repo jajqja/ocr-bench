@@ -12,3 +12,4 @@ black
 h5py
 requests
 shapely
+openpyxl
