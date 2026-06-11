@@ -1,4 +1,5 @@
 """Dataset loading utilities shared across all benchmark scripts."""
+
 import gc
 import io
 import json
@@ -21,6 +22,7 @@ from utils.bbox import get_pdf_lines, rescale_bbox
 # ---------------------------------------------------------------------------
 # Shared helper
 # ---------------------------------------------------------------------------
+
 
 def download_h5_file(url: str, output_path: str) -> str:
     """Download an H5 file from a URL, skipping if already cached."""
@@ -49,6 +51,7 @@ def download_h5_file(url: str, output_path: str) -> str:
 # ---------------------------------------------------------------------------
 # Detection data loaders
 # ---------------------------------------------------------------------------
+
 
 def load_pdf_detection(
     pdf_path: str, max_pages: int = 100
@@ -95,7 +98,9 @@ def load_pdfa_detection(
             pdf_pages = convert_if_not_rgb(pdf_pages)
 
             metadata = (
-                json.loads(sample["ocr"]) if isinstance(sample["ocr"], str) else sample["ocr"]
+                json.loads(sample["ocr"])
+                if isinstance(sample["ocr"], str)
+                else sample["ocr"]
             )
 
             for page_idx, page_data in enumerate(metadata.get("pages", [])):
@@ -211,7 +216,10 @@ def load_nvidia_detection(
             remaining = max_rows - sample_count
 
             for img_batch, bbox_batch in load_h5_detection_data(
-                local_path, remaining, max_size_limit=max_size_limit, chunk_size=chunk_size
+                local_path,
+                remaining,
+                max_size_limit=max_size_limit,
+                chunk_size=chunk_size,
             ):
                 yield img_batch, bbox_batch
                 sample_count += len(img_batch)
@@ -226,6 +234,7 @@ def load_nvidia_detection(
 # ---------------------------------------------------------------------------
 # Recognition data loaders
 # ---------------------------------------------------------------------------
+
 
 def get_full_image_bboxes(images: List[Image.Image]) -> List[List[List[int]]]:
     """Create a single full-image bbox per image (for whole-image recognition)."""
@@ -259,7 +268,10 @@ def extract_text_from_pdf(
                     continue
                 ground_truth_texts.append(text)
                 line_bboxes.append(
-                    [int(round(v)) for v in rescale_bbox(line["bbox"], page_size, image.size)]
+                    [
+                        int(round(v))
+                        for v in rescale_bbox(line["bbox"], page_size, image.size)
+                    ]
                 )
         page_bboxes.append(line_bboxes)
 
@@ -300,7 +312,9 @@ def load_pdfa_recognition(
             pdf_pages = convert_if_not_rgb(pdf_pages)
 
             metadata = (
-                json.loads(sample["ocr"]) if isinstance(sample["ocr"], str) else sample["ocr"]
+                json.loads(sample["ocr"])
+                if isinstance(sample["ocr"], str)
+                else sample["ocr"]
             )
 
             for page_idx, page_data in enumerate(metadata.get("pages", [])):

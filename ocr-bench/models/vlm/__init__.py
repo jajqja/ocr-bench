@@ -7,7 +7,5 @@ REGISTRY: dict = {
 
 def load(name: str, **kwargs) -> BaseEndToEndModel:
     if name not in REGISTRY:
-        raise ValueError(
-            f"Unknown VLM '{name}'. Available: {sorted(REGISTRY)}"
-        )
+        raise ValueError(f"Unknown VLM '{name}'. Available: {sorted(REGISTRY)}")
     return REGISTRY[name](**kwargs)

@@ -6,6 +6,7 @@ To implement:
 3. Implement predict() below
 4. Register in models/vlm/__init__.py: REGISTRY["qwen_vl"] = QwenVLModel
 """
+
 from typing import List
 
 from PIL import Image

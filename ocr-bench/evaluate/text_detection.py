@@ -23,33 +23,49 @@ from models.detection import load as load_detection_model
 
 @click.command(help="Benchmark a detection model on a dataset.")
 @click.option("--pdf_path", type=str, default=None, help="Path to PDF file.")
-@click.option("--dataset_name", type=str, default=None, help="HuggingFace dataset name.")
 @click.option(
-    "--results_dir", type=str, default="./results/detection_benchmark",
+    "--dataset_name", type=str, default=None, help="HuggingFace dataset name."
+)
+@click.option(
+    "--results_dir",
+    type=str,
+    default="./results/detection_benchmark",
     help="Directory to write results.",
 )
 @click.option("--max_rows", type=int, default=100, help="Max pages/samples to process.")
-@click.option("--debug", is_flag=True, default=False, help="Save bbox visualisation images.")
 @click.option(
-    "--model", type=str, default="surya",
+    "--debug", is_flag=True, default=False, help="Save bbox visualisation images."
+)
+@click.option(
+    "--model",
+    type=str,
+    default="surya",
     help="Detection model name (must be registered in models/detection/__init__.py).",
 )
 @click.option("--model_path", type=str, required=True, help="Path to model checkpoint.")
 @click.option(
-    "--language", type=str, default="en",
+    "--language",
+    type=str,
+    default="en",
     help="Language for NVIDIA dataset (en, ja, ko, ru, zh_hans, zh_hant).",
 )
 @click.option(
-    "--h5_files", type=str, default="train_000",
+    "--h5_files",
+    type=str,
+    default="train_000",
     help="Comma-separated H5 filenames for the NVIDIA dataset.",
 )
 @click.option("--batch_size", type=int, default=8, help="Inference batch size.")
 @click.option(
-    "--chunk_size", type=int, default=10000,
+    "--chunk_size",
+    type=int,
+    default=10000,
     help="Samples per chunk when streaming large datasets.",
 )
 @click.option(
-    "--max_size_limit", type=int, default=None,
+    "--max_size_limit",
+    type=int,
+    default=None,
     help="Resize images so the longest side does not exceed this value.",
 )
 def main(
@@ -93,8 +109,11 @@ def main(
         print(f"Streaming dataset: {dataset_name} in chunks of {chunk_size}")
         h5_file_list = [f.strip() for f in h5_files.split(",")]
         data_generator = load_nvidia_detection(
-            h5_file_list, max_rows, language,
-            max_size_limit=max_size_limit, chunk_size=chunk_size,
+            h5_file_list,
+            max_rows,
+            language,
+            max_size_limit=max_size_limit,
+            chunk_size=chunk_size,
         )
     else:
         raise ValueError("Either --pdf_path or --dataset_name must be provided")
@@ -131,8 +150,12 @@ def main(
 
             if debug:
                 combined = copy.deepcopy(img_chunk[local_idx])
-                combined = draw_bboxes_on_image(combined, gt_boxes, color="green", width=2)
-                combined = draw_bboxes_on_image(combined, pred_boxes, color="red", width=2)
+                combined = draw_bboxes_on_image(
+                    combined, gt_boxes, color="green", width=2
+                )
+                combined = draw_bboxes_on_image(
+                    combined, pred_boxes, color="red", width=2
+                )
                 combined.save(os.path.join(debug_path, f"{global_idx}_bbox_debug.png"))
 
             global_idx += 1

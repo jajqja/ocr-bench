@@ -7,6 +7,7 @@ Evaluation uses page-level CER/WER: all text lines for a page are joined and
 compared as a single string, which avoids line-count mismatch issues common
 with VLMs that don't predict the exact same number of lines as the GT.
 """
+
 import json
 import os
 import time
@@ -53,41 +54,61 @@ def _group_texts_by_page(
 
 @click.command(help="Benchmark an end-to-end OCR model (VLM or API) on a dataset.")
 @click.option("--pdf_path", type=str, default=None, help="Path to PDF file.")
-@click.option("--dataset_name", type=str, default=None, help="HuggingFace dataset name.")
 @click.option(
-    "--data_dir", type=str, default=None,
+    "--dataset_name", type=str, default=None, help="HuggingFace dataset name."
+)
+@click.option(
+    "--data_dir",
+    type=str,
+    default=None,
     help="Local dataset folder containing images/ and labels.txt.",
 )
-@click.option("--image_folder", type=str, default="images", help="Image subfolder name.")
+@click.option(
+    "--image_folder", type=str, default="images", help="Image subfolder name."
+)
 @click.option("--label_file", type=str, default="labels.txt", help="Labels filename.")
 @click.option(
-    "--results_dir", type=str, default="./results/end_to_end_benchmark",
+    "--results_dir",
+    type=str,
+    default="./results/end_to_end_benchmark",
     help="Directory to write results.",
 )
 @click.option("--max_rows", type=int, default=100, help="Max samples to evaluate.")
 @click.option("--batch_size", type=int, default=4, help="Inference batch size.")
 @click.option(
-    "--model_type", type=click.Choice(["vlm", "api"]), required=True,
+    "--model_type",
+    type=click.Choice(["vlm", "api"]),
+    required=True,
     help="Model category: 'vlm' for local VLMs, 'api' for cloud API models.",
 )
 @click.option(
-    "--model", type=str, required=True,
+    "--model",
+    type=str,
+    required=True,
     help="Model name within the chosen category (must be registered in its __init__.py).",
 )
 @click.option(
-    "--model_path", type=str, default=None,
+    "--model_path",
+    type=str,
+    default=None,
     help="Checkpoint path (required for local VLMs, omit for API models).",
 )
 @click.option(
-    "--language", type=str, default="en",
+    "--language",
+    type=str,
+    default="en",
     help="Language for NVIDIA dataset (en, ja, ko, ru, zh_hans, zh_hant).",
 )
 @click.option(
-    "--h5_files", type=str, default="train_000",
+    "--h5_files",
+    type=str,
+    default="train_000",
     help="Comma-separated H5 filenames for the NVIDIA dataset.",
 )
 @click.option(
-    "--max_size_limit", type=int, default=None,
+    "--max_size_limit",
+    type=int,
+    default=None,
     help="Resize images so the longest side does not exceed this value.",
 )
 def main(
@@ -121,11 +142,15 @@ def main(
     elif dataset_name == "vikp/doclaynet_bench":
         pathname = dataset_name.replace("/", "_")
         print(f"Loading dataset: {dataset_name}")
-        images, ground_truth_texts, bboxes = load_doclaynet_recognition(dataset_name, max_rows)
+        images, ground_truth_texts, bboxes = load_doclaynet_recognition(
+            dataset_name, max_rows
+        )
     elif dataset_name == "pixparse/pdfa-eng-wds":
         pathname = dataset_name.replace("/", "_")
         print(f"Loading dataset: {dataset_name}")
-        images, ground_truth_texts, bboxes = load_pdfa_recognition(dataset_name, max_rows)
+        images, ground_truth_texts, bboxes = load_pdfa_recognition(
+            dataset_name, max_rows
+        )
     elif dataset_name == "nvidia/OCR-Synthetic-Multilingual-v1":
         pathname = f"nvidia_ocr_{language}"
         print(f"Loading dataset: {dataset_name}")
@@ -140,7 +165,9 @@ def main(
             data_dir, image_folder, label_file, max_rows
         )
     else:
-        raise ValueError("Either --pdf_path, --dataset_name, or --data_dir must be provided")
+        raise ValueError(
+            "Either --pdf_path, --dataset_name, or --data_dir must be provided"
+        )
 
     # Group GT text lines into page-level strings for evaluation
     page_gt_texts = _group_texts_by_page(ground_truth_texts, bboxes)
@@ -162,7 +189,9 @@ def main(
 
     # --- Metrics (page-level) ---
     print("Calculating page-level metrics...")
-    metrics = calculate_recognition_metrics(page_gt_texts, page_pred_texts, show_progress=True)
+    metrics = calculate_recognition_metrics(
+        page_gt_texts, page_pred_texts, show_progress=True
+    )
 
     # --- Save results ---
     os.makedirs(results_dir, exist_ok=True)
@@ -219,7 +248,9 @@ def main(
         print(f"\nPage {i + 1}:")
         print(f"  GT:   {page_gt_texts[i][:120]}...")
         print(f"  Pred: {page_pred_texts[i][:120]}...")
-        print(f"  CER: {metrics['cer_scores'][i]:.4f}, WER: {metrics['wer_scores'][i]:.4f}")
+        print(
+            f"  CER: {metrics['cer_scores'][i]:.4f}, WER: {metrics['wer_scores'][i]:.4f}"
+        )
 
     print(f"\nResults saved to: {result_path}")
 

@@ -6,7 +6,7 @@ To implement:
 3. Implement predict() below using the Anthropic vision API
 4. Register in models/api/__init__.py: REGISTRY["claude"] = ClaudeOCRModel
 """
-import os
+
 from typing import List
 
 from PIL import Image

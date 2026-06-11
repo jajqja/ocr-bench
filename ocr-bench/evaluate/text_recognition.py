@@ -20,34 +20,50 @@ from models.recognition import load as load_recognition_model
 
 @click.command(help="Benchmark a recognition model on a dataset.")
 @click.option("--pdf_path", type=str, default=None, help="Path to PDF file.")
-@click.option("--dataset_name", type=str, default=None, help="HuggingFace dataset name.")
 @click.option(
-    "--data_dir", type=str, default=None,
+    "--dataset_name", type=str, default=None, help="HuggingFace dataset name."
+)
+@click.option(
+    "--data_dir",
+    type=str,
+    default=None,
     help="Local dataset folder containing images/ and labels.txt.",
 )
-@click.option("--image_folder", type=str, default="images", help="Image subfolder name.")
+@click.option(
+    "--image_folder", type=str, default="images", help="Image subfolder name."
+)
 @click.option("--label_file", type=str, default="labels.txt", help="Labels filename.")
 @click.option(
-    "--results_dir", type=str, default="./results/recognition_benchmark",
+    "--results_dir",
+    type=str,
+    default="./results/recognition_benchmark",
     help="Directory to write results.",
 )
 @click.option("--max_rows", type=int, default=100, help="Max samples to evaluate.")
 @click.option("--batch_size", type=int, default=8, help="Inference batch size.")
 @click.option(
-    "--model", type=str, default="surya",
+    "--model",
+    type=str,
+    default="surya",
     help="Recognition model name (must be registered in models/recognition/__init__.py).",
 )
 @click.option("--model_path", type=str, required=True, help="Path to model checkpoint.")
 @click.option(
-    "--language", type=str, default="en",
+    "--language",
+    type=str,
+    default="en",
     help="Language for NVIDIA dataset (en, ja, ko, ru, zh_hans, zh_hant).",
 )
 @click.option(
-    "--h5_files", type=str, default="train_000",
+    "--h5_files",
+    type=str,
+    default="train_000",
     help="Comma-separated H5 filenames for the NVIDIA dataset.",
 )
 @click.option(
-    "--max_size_limit", type=int, default=None,
+    "--max_size_limit",
+    type=int,
+    default=None,
     help="Resize images so the longest side does not exceed this value.",
 )
 def main(
@@ -79,11 +95,15 @@ def main(
     elif dataset_name == "vikp/doclaynet_bench":
         pathname = dataset_name.replace("/", "_")
         print(f"Loading dataset: {dataset_name}")
-        images, ground_truth_texts, bboxes = load_doclaynet_recognition(dataset_name, max_rows)
+        images, ground_truth_texts, bboxes = load_doclaynet_recognition(
+            dataset_name, max_rows
+        )
     elif dataset_name == "pixparse/pdfa-eng-wds":
         pathname = dataset_name.replace("/", "_")
         print(f"Loading dataset: {dataset_name}")
-        images, ground_truth_texts, bboxes = load_pdfa_recognition(dataset_name, max_rows)
+        images, ground_truth_texts, bboxes = load_pdfa_recognition(
+            dataset_name, max_rows
+        )
     elif dataset_name == "nvidia/OCR-Synthetic-Multilingual-v1":
         pathname = f"nvidia_ocr_{language}"
         print(f"Loading dataset: {dataset_name}")
@@ -98,7 +118,9 @@ def main(
             data_dir, image_folder, label_file, max_rows
         )
     else:
-        raise ValueError("Either --pdf_path, --dataset_name, or --data_dir must be provided")
+        raise ValueError(
+            "Either --pdf_path, --dataset_name, or --data_dir must be provided"
+        )
 
     flat_bboxes = [bbox for page_bboxes in bboxes for bbox in page_bboxes]
     sample_count = len(ground_truth_texts)
@@ -117,7 +139,9 @@ def main(
 
     # --- Metrics ---
     print("Calculating metrics...")
-    metrics = calculate_recognition_metrics(ground_truth_texts, predictions, show_progress=True)
+    metrics = calculate_recognition_metrics(
+        ground_truth_texts, predictions, show_progress=True
+    )
 
     # --- Save results ---
     os.makedirs(results_dir, exist_ok=True)
@@ -130,7 +154,9 @@ def main(
         "num_samples": sample_count,
         "num_images": len(images),
         "inference_time_total": inference_time,
-        "inference_time_per_sample": inference_time / sample_count if sample_count else 0,
+        "inference_time_per_sample": (
+            inference_time / sample_count if sample_count else 0
+        ),
         "metrics": {
             "cer": metrics["cer"],
             "wer": metrics["wer"],
@@ -175,7 +201,9 @@ def main(
         print(f"\nSample {i + 1}:")
         print(f"  Ground Truth: {ground_truth_texts[i][:100]}...")
         print(f"  Prediction:   {predictions[i][:100]}...")
-        print(f"  CER: {metrics['cer_scores'][i]:.4f}, WER: {metrics['wer_scores'][i]:.4f}")
+        print(
+            f"  CER: {metrics['cer_scores'][i]:.4f}, WER: {metrics['wer_scores'][i]:.4f}"
+        )
 
 
 if __name__ == "__main__":
