@@ -1,7 +1,19 @@
 import pymupdf
-from surya.common.util import rescale_bbox
-
 from PIL import ImageDraw
+
+
+def rescale_bbox(bbox, from_size, to_size):
+    """Rescale a bbox from one coordinate space to another.
+
+    Args:
+        bbox: [x1, y1, x2, y2]
+        from_size: (width, height) of the source coordinate space
+        to_size: (width, height) of the target coordinate space
+    """
+    x1, y1, x2, y2 = bbox
+    x_scale = to_size[0] / from_size[0]
+    y_scale = to_size[1] / from_size[1]
+    return [x1 * x_scale, y1 * y_scale, x2 * x_scale, y2 * y_scale]
 
 
 def get_pdf_lines(pdf_path, img_sizes):
