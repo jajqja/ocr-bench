@@ -199,12 +199,61 @@ Supported languages: `en`, `ja`, `ko`, `ru`, `zh_hans`, `zh_hant`
 
 ### Adding a new dataset
 
-1. Create `ocr-bench/utils/datasets/<name>.py` with a `BaseDataset` subclass
-   implementing `detection()` and/or `recognition()` (and optionally `pathname()`).
-   Read run-specific parameters from the `opts` dict.
-2. Register it in `ocr-bench/utils/datasets/__init__.py` (`REGISTRY`).
+**1. Create `ocr-bench/utils/datasets/<name>.py`** with a `BaseDataset` subclass.
+Implement `detection()` and/or `recognition()` (and optionally `pathname()`), and
+read run-specific parameters from the `opts` dict (populated from `--opt key=value`):
 
-No changes to the evaluate scripts are needed — they dispatch through the registry.
+```python
+# ocr-bench/utils/datasets/mydata.py
+from utils.datasets.base import BaseDataset
+
+
+class MyDataset(BaseDataset):
+    name = "mydata"  # the value passed to --dataset
+
+    def pathname(self, opts):
+        # used to name the results file; defaults to self.name if omitted
+        return opts.get("split", self.name)
+
+    def detection(self, max_rows, opts):
+        src = opts["src"]  # --opt src=...   (raise/KeyError if required & missing)
+        images, bboxes = load_my_data(src, max_rows)
+        # detection yields chunks (lets you stream large datasets):
+        #   images : list[PIL.Image]
+        #   bboxes : list per image of [x1, y1, x2, y2]
+        yield images, bboxes
+
+    def recognition(self, max_rows, opts):
+        src = opts["src"]
+        images, texts, bboxes = load_my_data_with_text(src, max_rows)
+        # recognition returns a single tuple (loaded into memory):
+        #   texts  : flat list of GT strings (one per bbox, across all images)
+        #   bboxes : list per image of [x1, y1, x2, y2]
+        return images, texts, bboxes
+```
+
+Implement only the task(s) you need — the base class raises a clear
+`NotImplementedError` for the other. `bbox` coordinates are pixel values in the
+returned image's space.
+
+**2. Register it** in `ocr-bench/utils/datasets/__init__.py`:
+
+```python
+from utils.datasets.mydata import MyDataset
+
+REGISTRY = {
+    # ... existing entries ...
+    MyDataset.name: MyDataset,
+}
+```
+
+**3. Run it** — no changes to the evaluate scripts are needed:
+
+```bash
+python ocr-bench/evaluate/text_recognition.py \
+  --dataset mydata --opt src=/path/to/data \
+  --model surya --model_path ./model_path/text_recognition
+```
 
 ---
 
