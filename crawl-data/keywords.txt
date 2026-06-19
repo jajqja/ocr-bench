@@ -1,28 +1,119 @@
 # Từ khóa tìm kiếm tiếng Việt — mỗi dòng là một truy vấn gửi tới OpenAlex.
 # Dòng bắt đầu bằng "#" hoặc dòng trống sẽ bị bỏ qua.
 # Các cụm từ tiếng Việt có dấu giúp lọc đúng tài liệu tiếng Việt (tín hiệu ngôn ngữ mạnh).
-# Bạn có thể thêm/bớt tự do; có thể kèm tên họ phổ biến để tăng độ phủ tác giả Việt.
 
-# --- Chủ đề học thuật (cụm từ tiếng Việt) ---
+# ===== Kinh tế - Tài chính =====
 phát triển kinh tế Việt Nam
+tăng trưởng kinh tế
+kinh tế số
+chính sách tài chính công
+thị trường chứng khoán Việt Nam
+quản trị doanh nghiệp
+đầu tư trực tiếp nước ngoài
+chuỗi cung ứng
+thương mại điện tử
+tài chính vi mô
+ngân hàng thương mại
+lạm phát và chính sách tiền tệ
+kinh tế tuần hoàn
+phát triển bền vững
+
+# ===== Giáo dục =====
 giáo dục đại học Việt Nam
+đổi mới giáo dục
+chuyển đổi số trong giáo dục
+phương pháp dạy học tích cực
+giáo dục mầm non
+đánh giá kết quả học tập
+năng lực tự học của sinh viên
+giáo dục STEM
+đào tạo nghề
+kiểm định chất lượng giáo dục
+
+# ===== Y học - Y tế =====
+chăm sóc sức khỏe cộng đồng
+y học cổ truyền
+bệnh truyền nhiễm
+dinh dưỡng và sức khỏe
+điều dưỡng
+ung thư và điều trị
+sức khỏe tâm thần
+y tế dự phòng
+dược liệu Việt Nam
+phẫu thuật nội soi
+
+# ===== Nông nghiệp - Thủy sản =====
 nông nghiệp bền vững
+nuôi trồng thủy sản
+cây lúa và năng suất
+chăn nuôi gia súc
+bảo vệ thực vật
+nông nghiệp công nghệ cao
+an toàn thực phẩm
+phân bón hữu cơ
+
+# ===== Môi trường - Khí hậu =====
 biến đổi khí hậu đồng bằng sông Cửu Long
+ô nhiễm môi trường
+quản lý chất thải rắn
+tài nguyên nước
+đa dạng sinh học
+năng lượng tái tạo
+xử lý nước thải
+
+# ===== Công nghệ - Kỹ thuật =====
+trí tuệ nhân tạo
+học máy và học sâu
+internet vạn vật
 công nghệ thông tin và truyền thông
-trí tuệ nhân tạo trong y học
+xử lý ngôn ngữ tự nhiên tiếng Việt
+kỹ thuật xây dựng
+cơ khí chế tạo
+điện tử viễn thông
+khoa học vật liệu
+an toàn thông tin
+
+# ===== Luật - Chính trị - Quản lý =====
+luật doanh nghiệp Việt Nam
+cải cách hành chính
 quản lý nhà nước
+chính sách công
+luật đất đai
+quyền con người
+tư tưởng Hồ Chí Minh
+
+# ===== Văn hóa - Xã hội - Nhân văn =====
 văn hóa dân tộc thiểu số
 ngôn ngữ học tiếng Việt
-chính sách tài chính công
+văn học Việt Nam hiện đại
+di sản văn hóa
 du lịch sinh thái
-sức khỏe cộng đồng
-năng lượng tái tạo
-khoa học vật liệu
-luật doanh nghiệp Việt Nam
+đô thị hóa và xã hội
+bình đẳng giới
+lịch sử Việt Nam
+tâm lý học giáo dục
+công tác xã hội
 
-# --- Tổ hợp tên họ phổ biến + chủ đề (tăng độ phủ tác giả) ---
+# ===== Khoa học tự nhiên =====
+hóa học hữu cơ
+vật lý chất rắn
+toán học ứng dụng
+sinh học phân tử
+địa chất và khoáng sản
+
+# ===== Tổ hợp tên họ phổ biến + chủ đề (tăng độ phủ tác giả) =====
 Nguyễn Văn nông nghiệp
-Trần Thị giáo dục
-Lê Văn kinh tế
-Phạm Thị y học
-Hoàng Văn môi trường
+Nguyễn Thị giáo dục
+Trần Văn kinh tế
+Trần Thị y học
+Lê Văn môi trường
+Lê Thị xã hội
+Phạm Văn công nghệ
+Phạm Thị y tế
+Hoàng Văn kỹ thuật
+Phan Thị văn hóa
+Vũ Văn quản lý
+Đặng Thị giáo dục
+Bùi Văn nông nghiệp
+Đỗ Thị kinh tế
+Ngô Văn lịch sử
