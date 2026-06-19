@@ -7,6 +7,7 @@ Opts:
 from pathlib import Path
 from typing import Dict, Generator, List, Tuple
 
+import pymupdf
 from PIL import Image
 from surya.input.processing import (
     convert_if_not_rgb,
@@ -47,15 +48,22 @@ class PdfDataset(BaseDataset):
         self, max_rows: int, opts: Dict[str, str]
     ) -> Tuple[List[Image.Image], List[str], List]:
         pdf_path = _require_path(opts)
-        doc = open_pdf(pdf_path)
-        page_count = min(len(doc), max_rows)
-        page_indices = list(range(page_count))
-        images = convert_if_not_rgb(get_page_images(doc, page_indices))
 
+        # Ảnh trang: render qua surya (cùng cách với detection).
+        sdoc = open_pdf(pdf_path)
+        page_count = min(len(sdoc), max_rows)
+        page_indices = list(range(page_count))
+        images = convert_if_not_rgb(get_page_images(sdoc, page_indices))
+        sdoc.close()
+
+        # Text + bbox: dùng pymupdf trực tiếp. surya.open_pdf trả về một
+        # pypdfium2.PdfDocument không có .get_text("dict"), nên phải mở riêng
+        # bằng pymupdf (giống get_pdf_lines trong utils/bbox.py).
+        mu_doc = pymupdf.open(pdf_path)
         ground_truth_texts: List[str] = []
         page_bboxes: List = []
         for idx, image in zip(page_indices, images):
-            page = doc[idx]
+            page = mu_doc[idx]
             blocks = page.get_text("dict", sort=True)["blocks"]
             page_box = page.bound()
             page_size = (page_box[2] - page_box[0], page_box[3] - page_box[1])
@@ -77,5 +85,5 @@ class PdfDataset(BaseDataset):
                     )
             page_bboxes.append(line_bboxes)
 
-        doc.close()
+        mu_doc.close()
         return images, ground_truth_texts, page_bboxes
