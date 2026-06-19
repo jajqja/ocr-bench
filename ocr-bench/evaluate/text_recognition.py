@@ -1,38 +1,28 @@
 import json
 import os
 import time
-from pathlib import Path
-from typing import Optional
 
 import click
 from tabulate import tabulate
 
 from utils.metrics import calculate_recognition_metrics
-from utils.datasets import (
-    extract_text_from_pdf,
-    load_doclaynet_recognition,
-    load_nvidia_recognition,
-    load_pdfa_recognition,
-    load_recognition_folder,
-)
+from utils.datasets import load_dataset, parse_opts
 from models.recognition import load as load_recognition_model
 
 
 @click.command(help="Benchmark a recognition model on a dataset.")
-@click.option("--pdf_path", type=str, default=None, help="Path to PDF file.")
 @click.option(
-    "--dataset_name", type=str, default=None, help="HuggingFace dataset name."
-)
-@click.option(
-    "--data_dir",
+    "--dataset",
     type=str,
-    default=None,
-    help="Local dataset folder containing images/ and labels.txt.",
+    required=True,
+    help="Dataset name (pdf, doclaynet, pdfa, nvidia, folder).",
 )
 @click.option(
-    "--image_folder", type=str, default="images", help="Image subfolder name."
+    "--opt",
+    "opts",
+    multiple=True,
+    help="Dataset-specific option key=value (repeatable). E.g. --opt path=a.pdf",
 )
-@click.option("--label_file", type=str, default="labels.txt", help="Labels filename.")
 @click.option(
     "--results_dir",
     type=str,
@@ -48,79 +38,24 @@ from models.recognition import load as load_recognition_model
     help="Recognition model name (must be registered in models/recognition/__init__.py).",
 )
 @click.option("--model_path", type=str, required=True, help="Path to model checkpoint.")
-@click.option(
-    "--language",
-    type=str,
-    default="en",
-    help="Language for NVIDIA dataset (en, ja, ko, ru, zh_hans, zh_hant).",
-)
-@click.option(
-    "--h5_files",
-    type=str,
-    default="train_000",
-    help="Comma-separated H5 filenames for the NVIDIA dataset.",
-)
-@click.option(
-    "--max_size_limit",
-    type=int,
-    default=None,
-    help="Resize images so the longest side does not exceed this value.",
-)
 def main(
-    pdf_path: Optional[str],
-    dataset_name: Optional[str],
-    data_dir: Optional[str],
-    image_folder: str,
-    label_file: str,
+    dataset: str,
+    opts: tuple,
     results_dir: str,
     max_rows: int,
     batch_size: int,
     model: str,
     model_path: str,
-    language: str,
-    h5_files: str,
-    max_size_limit: Optional[int],
 ):
     print(f"Loading recognition model '{model}' from {model_path}...")
     rec_model = load_recognition_model(model, checkpoint=model_path)
 
-    if max_size_limit:
-        print(f"Max image dimension: {max_size_limit}px")
-
     # --- Load data ---
-    if pdf_path is not None:
-        pathname = Path(pdf_path).stem
-        print(f"Loading data from PDF: {pdf_path}")
-        images, ground_truth_texts, bboxes = extract_text_from_pdf(pdf_path, max_rows)
-    elif dataset_name == "vikp/doclaynet_bench":
-        pathname = dataset_name.replace("/", "_")
-        print(f"Loading dataset: {dataset_name}")
-        images, ground_truth_texts, bboxes = load_doclaynet_recognition(
-            dataset_name, max_rows
-        )
-    elif dataset_name == "pixparse/pdfa-eng-wds":
-        pathname = dataset_name.replace("/", "_")
-        print(f"Loading dataset: {dataset_name}")
-        images, ground_truth_texts, bboxes = load_pdfa_recognition(
-            dataset_name, max_rows
-        )
-    elif dataset_name == "nvidia/OCR-Synthetic-Multilingual-v1":
-        pathname = f"nvidia_ocr_{language}"
-        print(f"Loading dataset: {dataset_name}")
-        h5_file_list = [f.strip() for f in h5_files.split(",")]
-        images, ground_truth_texts, bboxes = load_nvidia_recognition(
-            h5_file_list, max_rows, language, max_size_limit=max_size_limit
-        )
-    elif data_dir is not None:
-        pathname = Path(data_dir).name
-        print(f"Loading local dataset: {data_dir}")
-        images, ground_truth_texts, bboxes = load_recognition_folder(
-            data_dir, image_folder, label_file, max_rows
-        )
-    else:
-        raise ValueError(
-            "Either --pdf_path, --dataset_name, or --data_dir must be provided"
-        )
+    ds = load_dataset(dataset)
+    opt_dict = parse_opts(opts)
+    pathname = ds.pathname(opt_dict)
+    print(f"Loading dataset '{dataset}' (opts: {opt_dict or 'none'})")
+    images, ground_truth_texts, bboxes = ds.recognition(max_rows, opt_dict)
 
     flat_bboxes = [bbox for page_bboxes in bboxes for bbox in page_bboxes]
     sample_count = len(ground_truth_texts)

@@ -40,7 +40,11 @@ ocr-bench/
 │   │   ├── text_detection.py       # Export detection results to Excel
 │   │   └── text_recognition.py     # Export recognition results to Excel
 │   └── utils/
-│       ├── datasets.py             # Data loading for all benchmarks
+│       ├── datasets/               # Dataset registry (one module per dataset)
+│       │   ├── __init__.py         #   REGISTRY + load_dataset() + parse_opts()
+│       │   ├── base.py             #   BaseDataset interface
+│       │   ├── pdf.py  doclaynet.py  pdfa.py  nvidia.py  folder.py
+│       │   └── _common.py          #   shared H5 / download helpers
 │       ├── metrics.py              # IOU, CER, WER, Accuracy
 │       ├── bbox.py                 # Bounding box utilities
 │       └── model_download.py       # HuggingFace model downloader
@@ -82,24 +86,27 @@ python ocr-bench/utils/model_download.py \
 
 ### 2. Run Detection Benchmark
 
+Datasets are selected with `--dataset <name>`; per-dataset parameters are passed
+with repeatable `--opt key=value` flags (see [Supported Datasets](#supported-datasets)).
+
 ```bash
 # On a PDF file
 python ocr-bench/evaluate/text_detection.py \
-  --pdf_path /path/to/document.pdf \
+  --dataset pdf --opt path=/path/to/document.pdf \
   --model surya \
   --model_path ./model_path/text_detection \
   --max_rows 100
 
 # On a HuggingFace dataset
 python ocr-bench/evaluate/text_detection.py \
-  --dataset_name pixparse/pdfa-eng-wds \
+  --dataset pdfa \
   --model surya \
   --model_path ./model_path/text_detection \
   --max_rows 100
 
 # With debug visualizations (saves bbox images)
 python ocr-bench/evaluate/text_detection.py \
-  --dataset_name vikp/doclaynet_bench \
+  --dataset doclaynet \
   --model surya \
   --model_path ./model_path/text_detection \
   --max_rows 50 \
@@ -111,16 +118,17 @@ python ocr-bench/evaluate/text_detection.py \
 ```bash
 # On a PDF file
 python ocr-bench/evaluate/text_recognition.py \
-  --pdf_path /path/to/document.pdf \
+  --dataset pdf --opt path=/path/to/document.pdf \
   --model surya \
   --model_path ./model_path/text_recognition \
   --max_rows 100
 
 # On a local image folder
 python ocr-bench/evaluate/text_recognition.py \
-  --data_dir /path/to/dataset \
-  --image_folder images \
-  --label_file labels.txt \
+  --dataset folder \
+  --opt data_dir=/path/to/dataset \
+  --opt image_folder=images \
+  --opt label_file=labels.txt \
   --model surya \
   --model_path ./model_path/text_recognition \
   --max_rows 1000
@@ -143,14 +151,14 @@ python ocr-bench/evaluate/end_to_end.py \
   --model_type vlm \
   --model qwen_vl \
   --model_path ./model_path/qwen_vl \
-  --dataset_name vikp/doclaynet_bench \
+  --dataset doclaynet \
   --max_rows 100
 
 # Cloud API model
 python ocr-bench/evaluate/end_to_end.py \
   --model_type api \
   --model claude \
-  --dataset_name pixparse/pdfa-eng-wds \
+  --dataset pdfa \
   --max_rows 100
 ```
 
@@ -160,28 +168,39 @@ End-to-end evaluation uses **page-level CER/WER** — all text lines on a page a
 
 ## Supported Datasets
 
-| Dataset | Tasks | Notes |
-|---------|-------|-------|
-| `vikp/doclaynet_bench` | Detection, Recognition | Document layout with bounding boxes |
-| `pixparse/pdfa-eng-wds` | Detection, Recognition | English PDFs with word/line-level OCR |
-| `nvidia/OCR-Synthetic-Multilingual-v1` | Detection, Recognition | Large-scale multilingual synthetic data |
-| Local PDF | Detection, Recognition | GT extracted from embedded text layer |
-| Local folder | Recognition | Images + `labels.txt` |
+Each dataset has a short `--dataset` name and its own `--opt key=value` options.
+
+| `--dataset` | Tasks | `--opt` options | Notes |
+|-------------|-------|-----------------|-------|
+| `pdf` | Detection, Recognition | `path` (required) | GT from embedded text layer |
+| `doclaynet` | Detection, Recognition | `name` (default `vikp/doclaynet_bench`) | Document layout with bboxes |
+| `pdfa` | Detection, Recognition | `name` (default `pixparse/pdfa-eng-wds`) | English PDFs, word/line OCR |
+| `nvidia` | Detection, Recognition | `h5_files`, `language`, `max_size_limit`, `chunk_size` | Multilingual synthetic |
+| `folder` | Recognition | `data_dir` (required), `image_folder`, `label_file` | Images + `labels.txt` |
 
 ### NVIDIA multilingual dataset options
 
 ```bash
 python ocr-bench/evaluate/text_detection.py \
-  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
+  --dataset nvidia \
+  --opt language=en \
+  --opt h5_files=train_000,train_001 \
   --model surya \
   --model_path ./model_path/text_detection \
-  --language en \
-  --h5_files train_000,train_001 \
   --max_rows 1000 \
   --batch_size 32
 ```
 
 Supported languages: `en`, `ja`, `ko`, `ru`, `zh_hans`, `zh_hant`
+
+### Adding a new dataset
+
+1. Create `ocr-bench/utils/datasets/<name>.py` with a `BaseDataset` subclass
+   implementing `detection()` and/or `recognition()` (and optionally `pathname()`).
+   Read run-specific parameters from the `opts` dict.
+2. Register it in `ocr-bench/utils/datasets/__init__.py` (`REGISTRY`).
+
+No changes to the evaluate scripts are needed — they dispatch through the registry.
 
 ---
 
@@ -272,9 +291,11 @@ python ocr-bench/make_report/text_recognition.py
 
 ## Troubleshooting
 
-**Out of memory** — reduce `--batch_size` or `--max_size_limit`:
+**Out of memory** — reduce `--batch_size` (or, for the `nvidia` dataset, cap the
+image size with `--opt max_size_limit=1024`):
 ```bash
-python ocr-bench/evaluate/text_detection.py ... --batch_size 2 --max_size_limit 1024
+python ocr-bench/evaluate/text_detection.py ... --batch_size 2 \
+  --dataset nvidia --opt max_size_limit=1024
 ```
 
 **PDF extraction issues** — verify the PDF is text-based (not scanned):
@@ -304,14 +325,14 @@ python -c "import pymupdf; doc = pymupdf.open('file.pdf'); print(f'Pages: {len(d
 
 # Run benchmarks
 !python ocr-bench/evaluate/text_detection.py \
-  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
+  --dataset nvidia --opt language=en --opt h5_files=train_000 \
   --model surya \
   --model_path ./model_path/text_detection \
-  --language en --h5_files train_000 --max_rows 1000 --batch_size 32
+  --max_rows 1000 --batch_size 32
 
 !python ocr-bench/evaluate/text_recognition.py \
-  --dataset_name nvidia/OCR-Synthetic-Multilingual-v1 \
+  --dataset nvidia --opt language=en --opt h5_files=train_000 \
   --model surya \
   --model_path ./model_path/text_recognition \
-  --language en --h5_files train_000 --max_rows 1000 --batch_size 128
+  --max_rows 1000 --batch_size 128
 ```
