@@ -18,7 +18,6 @@ from surya.input.processing import open_pdf, get_page_images, convert_if_not_rgb
 
 from utils.bbox import get_pdf_lines, rescale_bbox
 
-
 # ---------------------------------------------------------------------------
 # Shared helper
 # ---------------------------------------------------------------------------
