@@ -11,20 +11,13 @@ with VLMs that don't predict the exact same number of lines as the GT.
 import json
 import os
 import time
-from pathlib import Path
 from typing import List, Optional
 
 import click
 from tabulate import tabulate
 
 from utils.metrics import calculate_recognition_metrics
-from utils.datasets import (
-    extract_text_from_pdf,
-    load_doclaynet_recognition,
-    load_nvidia_recognition,
-    load_pdfa_recognition,
-    load_recognition_folder,
-)
+from utils.datasets import load_dataset, parse_opts
 
 
 def _load_model(model_type: str, model_name: str, **kwargs):
@@ -53,20 +46,18 @@ def _group_texts_by_page(
 
 
 @click.command(help="Benchmark an end-to-end OCR model (VLM or API) on a dataset.")
-@click.option("--pdf_path", type=str, default=None, help="Path to PDF file.")
 @click.option(
-    "--dataset_name", type=str, default=None, help="HuggingFace dataset name."
-)
-@click.option(
-    "--data_dir",
+    "--dataset",
     type=str,
-    default=None,
-    help="Local dataset folder containing images/ and labels.txt.",
+    required=True,
+    help="Dataset name (pdf, doclaynet, pdfa, nvidia, folder).",
 )
 @click.option(
-    "--image_folder", type=str, default="images", help="Image subfolder name."
+    "--opt",
+    "opts",
+    multiple=True,
+    help="Dataset-specific option key=value (repeatable). E.g. --opt path=a.pdf",
 )
-@click.option("--label_file", type=str, default="labels.txt", help="Labels filename.")
 @click.option(
     "--results_dir",
     type=str,
@@ -93,39 +84,15 @@ def _group_texts_by_page(
     default=None,
     help="Checkpoint path (required for local VLMs, omit for API models).",
 )
-@click.option(
-    "--language",
-    type=str,
-    default="en",
-    help="Language for NVIDIA dataset (en, ja, ko, ru, zh_hans, zh_hant).",
-)
-@click.option(
-    "--h5_files",
-    type=str,
-    default="train_000",
-    help="Comma-separated H5 filenames for the NVIDIA dataset.",
-)
-@click.option(
-    "--max_size_limit",
-    type=int,
-    default=None,
-    help="Resize images so the longest side does not exceed this value.",
-)
 def main(
-    pdf_path: Optional[str],
-    dataset_name: Optional[str],
-    data_dir: Optional[str],
-    image_folder: str,
-    label_file: str,
+    dataset: str,
+    opts: tuple,
     results_dir: str,
     max_rows: int,
     batch_size: int,
     model_type: str,
     model: str,
     model_path: Optional[str],
-    language: str,
-    h5_files: str,
-    max_size_limit: Optional[int],
 ):
     kwargs = {}
     if model_path:
@@ -135,39 +102,11 @@ def main(
     ocr_model = _load_model(model_type, model, **kwargs)
 
     # --- Load data ---
-    if pdf_path is not None:
-        pathname = Path(pdf_path).stem
-        print(f"Loading PDF: {pdf_path}")
-        images, ground_truth_texts, bboxes = extract_text_from_pdf(pdf_path, max_rows)
-    elif dataset_name == "vikp/doclaynet_bench":
-        pathname = dataset_name.replace("/", "_")
-        print(f"Loading dataset: {dataset_name}")
-        images, ground_truth_texts, bboxes = load_doclaynet_recognition(
-            dataset_name, max_rows
-        )
-    elif dataset_name == "pixparse/pdfa-eng-wds":
-        pathname = dataset_name.replace("/", "_")
-        print(f"Loading dataset: {dataset_name}")
-        images, ground_truth_texts, bboxes = load_pdfa_recognition(
-            dataset_name, max_rows
-        )
-    elif dataset_name == "nvidia/OCR-Synthetic-Multilingual-v1":
-        pathname = f"nvidia_ocr_{language}"
-        print(f"Loading dataset: {dataset_name}")
-        h5_file_list = [f.strip() for f in h5_files.split(",")]
-        images, ground_truth_texts, bboxes = load_nvidia_recognition(
-            h5_file_list, max_rows, language, max_size_limit=max_size_limit
-        )
-    elif data_dir is not None:
-        pathname = Path(data_dir).name
-        print(f"Loading local dataset: {data_dir}")
-        images, ground_truth_texts, bboxes = load_recognition_folder(
-            data_dir, image_folder, label_file, max_rows
-        )
-    else:
-        raise ValueError(
-            "Either --pdf_path, --dataset_name, or --data_dir must be provided"
-        )
+    ds = load_dataset(dataset)
+    opt_dict = parse_opts(opts)
+    pathname = ds.pathname(opt_dict)
+    print(f"Loading dataset '{dataset}' (opts: {opt_dict or 'none'})")
+    images, ground_truth_texts, bboxes = ds.recognition(max_rows, opt_dict)
 
     # Group GT text lines into page-level strings for evaluation
     page_gt_texts = _group_texts_by_page(ground_truth_texts, bboxes)
