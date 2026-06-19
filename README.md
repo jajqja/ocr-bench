@@ -46,8 +46,7 @@ ocr-bench/
 │       │   ├── pdf.py  doclaynet.py  pdfa.py  nvidia.py  folder.py
 │       │   └── _common.py          #   shared H5 / download helpers
 │       ├── metrics.py              # IOU, CER, WER, Accuracy
-│       ├── bbox.py                 # Bounding box utilities
-│       └── model_download.py       # HuggingFace model downloader
+│       └── bbox.py                 # Bounding box utilities
 ├── requirements.txt
 └── README.md
 ```
@@ -68,26 +67,31 @@ pip install -r requirements.txt
 
 ---
 
-## Quick Start
+## Usage
 
-### 1. Download a model from HuggingFace
+Every benchmark follows the same flow:
 
-```bash
-python ocr-bench/utils/model_download.py \
-  --repo_id username/detection-model \
-  --local_dir model_path/text_detection \
-  --hf_token hf_***  # optional, for private models
+1. **Activate the environment** — `source .venv/bin/activate`.
+2. **Pick a model** with `--model <name>` and point `--model_path` at its local
+   checkpoint directory.
+3. **Pick a dataset** with `--dataset <name>` and pass its parameters via
+   repeatable `--opt key=value` flags — see [Supported Datasets](#supported-datasets).
+4. **Run the script** — results are written to `--results_dir` as JSON
+   (see [Output](#output)). Add `--debug` to detection to save bbox overlays.
 
-python ocr-bench/utils/model_download.py \
-  --repo_id username/recognition-model \
-  --local_dir model_path/text_recognition \
-  --hf_token hf_***
-```
+Options shared by all three benchmark scripts:
 
-### 2. Run Detection Benchmark
+| Option | Description |
+|--------|-------------|
+| `--dataset` | Dataset name: `pdf`, `doclaynet`, `pdfa`, `nvidia`, `folder` |
+| `--opt key=value` | Dataset-specific parameter (repeatable) |
+| `--model` | Model name from its registry (default `surya` for detection/recognition) |
+| `--model_path` | Local directory containing the model checkpoint |
+| `--max_rows` | Max pages/samples to evaluate |
+| `--batch_size` | Inference batch size |
+| `--results_dir` | Output directory for JSON results |
 
-Datasets are selected with `--dataset <name>`; per-dataset parameters are passed
-with repeatable `--opt key=value` flags (see [Supported Datasets](#supported-datasets)).
+### 1. Text detection
 
 ```bash
 # On a PDF file
@@ -113,7 +117,7 @@ python ocr-bench/evaluate/text_detection.py \
   --debug
 ```
 
-### 3. Run Recognition Benchmark
+### 2. Text recognition
 
 ```bash
 # On a PDF file
@@ -143,7 +147,7 @@ dataset/
 └── labels.txt      # one line per image: "img_001.jpg<TAB>ground truth text"
 ```
 
-### 4. Run End-to-End Benchmark (VLMs / API models)
+### 3. End-to-end OCR (VLM / API models)
 
 ```bash
 # VLM (local model)
@@ -312,18 +316,7 @@ python -c "import pymupdf; doc = pymupdf.open('file.pdf'); print(f'Pages: {len(d
 %cd ocr-bench
 !pip install -r requirements.txt
 
-# Download models
-!python ocr-bench/utils/model_download.py \
-  --repo_id newai-vn/newai-text-det \
-  --local_dir model_path/text_detection \
-  --hf_token hf_***
-
-!python ocr-bench/utils/model_download.py \
-  --repo_id newai-vn/newai-text-rec \
-  --local_dir model_path/text_recognition \
-  --hf_token hf_***
-
-# Run benchmarks
+# Run benchmarks (point --model_path at your local checkpoint directory)
 !python ocr-bench/evaluate/text_detection.py \
   --dataset nvidia --opt language=en --opt h5_files=train_000 \
   --model surya \
