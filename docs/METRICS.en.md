@@ -1,5 +1,7 @@
 # OCR Evaluation Metrics System
 
+**English** · [Tiếng Việt](METRICS.vi.md) — back to [README](README.en.md)
+
 This document specifies and details the calculation methods for the evaluation metrics utilized across both stages of the OCR pipeline: **Textline Detection** and **Text Recognition**.
 
 ---
