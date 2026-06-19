@@ -1,0 +1,28 @@
+# Từ khóa tìm kiếm tiếng Việt — mỗi dòng là một truy vấn gửi tới OpenAlex.
+# Dòng bắt đầu bằng "#" hoặc dòng trống sẽ bị bỏ qua.
+# Các cụm từ tiếng Việt có dấu giúp lọc đúng tài liệu tiếng Việt (tín hiệu ngôn ngữ mạnh).
+# Bạn có thể thêm/bớt tự do; có thể kèm tên họ phổ biến để tăng độ phủ tác giả Việt.
+
+# --- Chủ đề học thuật (cụm từ tiếng Việt) ---
+phát triển kinh tế Việt Nam
+giáo dục đại học Việt Nam
+nông nghiệp bền vững
+biến đổi khí hậu đồng bằng sông Cửu Long
+công nghệ thông tin và truyền thông
+trí tuệ nhân tạo trong y học
+quản lý nhà nước
+văn hóa dân tộc thiểu số
+ngôn ngữ học tiếng Việt
+chính sách tài chính công
+du lịch sinh thái
+sức khỏe cộng đồng
+năng lượng tái tạo
+khoa học vật liệu
+luật doanh nghiệp Việt Nam
+
+# --- Tổ hợp tên họ phổ biến + chủ đề (tăng độ phủ tác giả) ---
+Nguyễn Văn nông nghiệp
+Trần Thị giáo dục
+Lê Văn kinh tế
+Phạm Thị y học
+Hoàng Văn môi trường
