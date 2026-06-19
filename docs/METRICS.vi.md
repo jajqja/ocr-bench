@@ -1,5 +1,7 @@
 # Hệ Thống Độ Đo Hệ Thống OCR (OCR Evaluation Metrics)
 
+[English](METRICS.en.md) · **Tiếng Việt** — quay lại [README](README.vi.md)
+
 Tài liệu này quy định và giải thích chi tiết cách thức tính toán các chỉ số đánh giá (metrics) cho cả hai tầng trong pipeline OCR: **Textline Detection (Phát hiện dòng chữ)** và **Text Recognition (Nhận diện chữ)**.
 
 ---
