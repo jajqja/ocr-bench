@@ -1,4 +1,4 @@
-surya-ocr==0.15.4
+surya-ocr==0.17.1
 huggingface_hub
 click
 tabulate
