@@ -218,8 +218,15 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Model path
-model_path/
+model_path/*
 
 excels/*
 
 results/*
+
+# crawl-data: dữ liệu sinh ra khi chạy pipeline (giữ lại code + keywords.txt)
+crawl-data/pdfs/
+crawl-data/json/
+crawl-data/preview/
+crawl-data/*.jsonl
+crawl-data/*.out
