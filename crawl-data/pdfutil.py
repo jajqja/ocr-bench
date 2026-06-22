@@ -83,6 +83,38 @@ def is_noise_text(text: str) -> bool:
     return not any(ch.isalnum() for ch in text)
 
 
+def _bbox_iou(a: List[float], b: List[float]) -> float:
+    """IoU của hai bbox [x1,y1,x2,y2]."""
+    ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
+    ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])
+    inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+    if inter <= 0:
+        return 0.0
+    area_a = max(0.0, a[2] - a[0]) * max(0.0, a[3] - a[1])
+    area_b = max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+    union = area_a + area_b - inter
+    return inter / union if union > 0 else 0.0
+
+
+def dedup_overlapping(lines: List[Dict], iou_thresh: float = 0.5) -> List[Dict]:
+    """Bỏ các dòng bị vẽ trùng (overprint): cùng text VÀ bbox đè nhau.
+
+    Chỉ khử khi text giống hệt và IoU >= ngưỡng — nên giữ nguyên nội dung lặp
+    hợp lệ ở vị trí khác (ô bảng, cùng câu trên nhiều dòng) vì bbox không đè.
+    Mỗi line là dict {"bbox": [x1,y1,x2,y2], "text": str}. Giữ dòng xuất hiện
+    trước.
+    """
+    kept: List[Dict] = []
+    for ln in lines:
+        if any(
+            k["text"] == ln["text"] and _bbox_iou(k["bbox"], ln["bbox"]) >= iou_thresh
+            for k in kept
+        ):
+            continue
+        kept.append(ln)
+    return kept
+
+
 def pdf_stats(path: str, max_pages: int = 50) -> Dict:
     """Thu thập thống kê để quyết định PDF có phải digital + tiếng Việt không."""
     doc = pymupdf.open(path)

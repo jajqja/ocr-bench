@@ -18,16 +18,21 @@ import pymupdf
 
 from common import JSON_DIR, ROOT, ensure_dirs, read_jsonl
 from filter_pdf import FILTERED_FILE
-from pdfutil import clean_text, is_noise_text, page_text_lines
+from pdfutil import clean_text, dedup_overlapping, is_noise_text, page_text_lines
 
 
 def extract_pdf(
-    pdf_path: str, dpi: int, max_pages: int, keep_noise: bool = False
+    pdf_path: str,
+    dpi: int,
+    max_pages: int,
+    keep_noise: bool = False,
+    keep_dups: bool = False,
 ) -> List[Dict]:
     """Trích line bbox (pixel @dpi) + text cho từng trang.
 
-    Mặc định làm sạch text (gom khoảng trắng thừa) và bỏ các dòng chỉ gồm ký
-    tự phân cách như '_______'. Đặt keep_noise=True để giữ nguyên.
+    Mặc định làm sạch text (gom khoảng trắng thừa), bỏ các dòng chỉ gồm ký tự
+    phân cách như '_______', và khử dòng vẽ trùng (overprint: cùng text + bbox
+    đè nhau). Đặt keep_noise/keep_dups=True để giữ nguyên.
     """
     scale = dpi / 72.0  # PDF point = 1/72 inch
     doc = pymupdf.open(pdf_path)
@@ -55,6 +60,8 @@ def extract_pdf(
                     "text": text,
                 }
             )
+        if not keep_dups:
+            lines = dedup_overlapping(lines)
         pages.append(
             {"page_index": i, "width": width, "height": height, "lines": lines}
         )
@@ -71,6 +78,11 @@ def main() -> None:
         action="store_true",
         help="Giữ nguyên các dòng phân cách như '_______' (mặc định bỏ)",
     )
+    parser.add_argument(
+        "--keep-dups",
+        action="store_true",
+        help="Giữ nguyên dòng vẽ trùng/overprint (mặc định khử)",
+    )
     args = parser.parse_args()
 
     ensure_dirs()
@@ -81,7 +93,11 @@ def main() -> None:
         pdf_path = ROOT / r["pdf_path"]
         try:
             pages = extract_pdf(
-                str(pdf_path), args.dpi, args.max_pages, args.keep_noise
+                str(pdf_path),
+                args.dpi,
+                args.max_pages,
+                args.keep_noise,
+                args.keep_dups,
             )
         except Exception as e:
             print(f"[{i}/{len(accepted)}] LỖI {r['id']}: {e}")
