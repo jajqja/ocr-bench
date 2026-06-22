@@ -27,12 +27,14 @@ def extract_pdf(
     max_pages: int,
     keep_noise: bool = False,
     keep_dups: bool = False,
+    min_size: float = 3.0,
 ) -> List[Dict]:
     """Trích line bbox (pixel @dpi) + text cho từng trang.
 
     Mặc định làm sạch text (gom khoảng trắng thừa), bỏ các dòng chỉ gồm ký tự
-    phân cách như '_______', và khử dòng vẽ trùng (overprint: cùng text + bbox
-    đè nhau). Đặt keep_noise/keep_dups=True để giữ nguyên.
+    phân cách như '_______', khử dòng vẽ trùng (overprint), và bỏ chữ siêu nhỏ
+    < min_size point (măng-sét trang trí). Đặt keep_noise/keep_dups=True hoặc
+    min_size=0 để giữ nguyên.
     """
     scale = dpi / 72.0  # PDF point = 1/72 inch
     doc = pymupdf.open(pdf_path)
@@ -44,7 +46,7 @@ def extract_pdf(
         height = int(round(rect.height * scale))
 
         lines = []
-        for bbox_pt, text in page_text_lines(page):
+        for bbox_pt, text in page_text_lines(page, min_size=min_size):
             text = clean_text(text)
             if not text or (not keep_noise and is_noise_text(text)):
                 continue
@@ -83,6 +85,12 @@ def main() -> None:
         action="store_true",
         help="Giữ nguyên dòng vẽ trùng/overprint (mặc định khử)",
     )
+    parser.add_argument(
+        "--min-size",
+        type=float,
+        default=3.0,
+        help="Bỏ dòng có cỡ chữ < giá trị này (point); 0 để tắt (mặc định 3.0)",
+    )
     args = parser.parse_args()
 
     ensure_dirs()
@@ -98,6 +106,7 @@ def main() -> None:
                 args.max_pages,
                 args.keep_noise,
                 args.keep_dups,
+                args.min_size,
             )
         except Exception as e:
             print(f"[{i}/{len(accepted)}] LỖI {r['id']}: {e}")
