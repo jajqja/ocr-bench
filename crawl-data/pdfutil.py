@@ -46,19 +46,30 @@ _VI_WORDS = {
 }
 
 
-def page_text_lines(page: pymupdf.Page) -> List[Tuple[List[float], str]]:
+def page_text_lines(
+    page: pymupdf.Page, min_size: float = 0.0
+) -> List[Tuple[List[float], str]]:
     """Trả về list (bbox_point, text) cho từng dòng text trên trang.
 
     bbox ở hệ tọa độ điểm (point) của PDF. text đã chuẩn hóa NFC.
+
+    min_size > 0: bỏ dòng có cỡ chữ lớn nhất < min_size (point) — dùng để loại
+    chữ trang trí siêu nhỏ (măng-sét ~1-2pt, dàn cách từng glyph) không phải
+    ground-truth hữu ích.
     """
     blocks = page.get_text("dict", sort=True, flags=_TEXT_FLAGS)["blocks"]
     lines = []
     for block in blocks:
         for line in block.get("lines", []):
-            text = "".join(span.get("text", "") for span in line.get("spans", []))
-            text = normalize_text(text)
-            if text.strip():
-                lines.append((list(line["bbox"]), text))
+            spans = line.get("spans", [])
+            text = normalize_text("".join(span.get("text", "") for span in spans))
+            if not text.strip():
+                continue
+            if min_size > 0:
+                max_size = max((span.get("size", 0.0) for span in spans), default=0.0)
+                if max_size < min_size:
+                    continue
+            lines.append((list(line["bbox"]), text))
     return lines
 
 
